@@ -1,0 +1,161 @@
+{
+  "locale": "ru",
+  "title": "",
+  "eyebrow": "",
+  "start": "",
+  "end": "",
+  "tz": "",
+  "flights": {
+    "out": null,
+    "back": null,
+    "durationText": ""
+  },
+  "hotels": [],
+  "guide": {
+    "name": "",
+    "phone": ""
+  },
+  "airport": {
+    "name": "Бен-Гурион",
+    "hoursBefore": 3,
+    "where": "",
+    "short": "",
+    "q": "Ben Gurion Airport"
+  },
+  "currency": {
+    "code": "",
+    "symbol": "",
+    "name": "",
+    "homeSymbol": "₪",
+    "homeName": "Шекели",
+    "rate": null,
+    "childAge": 12
+  },
+  "contacts": [],
+  "days": [],
+  "signupForm": "",
+  "options": [],
+  "checklist": [
+    "Паспорт действует ещё минимум 6 месяцев после возвращения",
+    "Виза или разрешение на въезд — если нужно (смотрите «Важно перед поездкой»)",
+    "Медицинская страховка",
+    "Переходник для местных розеток",
+    "Банковская карта и немного местной валюты",
+    "Пауэрбанк и зарядки",
+    "Роуминг или eSIM",
+    "Личные лекарства в ручной клади",
+    "Копии паспорта и страховки в телефоне",
+    "Одежда по погоде — прогноз появится в «Сегодня» за 2 недели",
+    "Скачать офлайн-карту района поездки в Google Maps"
+  ],
+  "phrasesBasics": [],
+  "phrases": [],
+  "apps": [],
+  "lines": [],
+  "walks": [],
+  "places": [],
+  "tips": [],
+  "quiz": {
+    "title": "",
+    "about": "",
+    "themes": [
+      {
+        "id": "all",
+        "title": "🎲 Все темы"
+      }
+    ],
+    "ranks": [
+      [
+        10,
+        "Знаток"
+      ],
+      [
+        8,
+        "Почти знаток"
+      ],
+      [
+        5,
+        "Путешественник"
+      ],
+      [
+        0,
+        "Турист"
+      ]
+    ],
+    "questions": []
+  },
+  "categories": {
+    "names": {
+      "all": "Все места",
+      "photo": "Для фото",
+      "sight": "Достопримечательности",
+      "museum": "Бесплатные музеи",
+      "xmas": "Ярмарки",
+      "view": "Виды",
+      "food": "Еда",
+      "pub": "Пабы и музыка",
+      "flea": "Блошиные рынки"
+    },
+    "icons": {
+      "sight": "🏛️",
+      "museum": "🖼️",
+      "xmas": "🎄",
+      "view": "🌆",
+      "food": "🍽️",
+      "pub": "🍺",
+      "flea": "🧸",
+      "photo": "📷",
+      "all": "📋"
+    },
+    "main": [
+      "xmas",
+      "sight",
+      "museum",
+      "food",
+      "pub"
+    ],
+    "more": [
+      "view",
+      "photo",
+      "flea"
+    ]
+  },
+  "transport": {
+    "colors": {},
+    "defaultLine": null,
+    "altHome": null
+  },
+  "city": {
+    "name": "",
+    "gen": "",
+    "dat": "",
+    "prep": "",
+    "flag": "",
+    "mapSuffix": ""
+  },
+  "home": {
+    "name": "Израиль",
+    "gen": "Израиля",
+    "prep": "в Израиле",
+    "tz": "Asia/Jerusalem",
+    "flag": "🇮🇱",
+    "dat": "Израилю"
+  },
+  "lang": {
+    "code": "en",
+    "voices": "",
+    "manner": "",
+    "accent": ""
+  },
+  "shelves": {
+    "season": null,
+    "eveningCats": [],
+    "eveningSub": ""
+  },
+  "help": {
+    "backToHotel": "Если связи нет — возвращайтесь в отель: нажмите «Показать таксисту».",
+    "theft": [],
+    "links": []
+  },
+  "warnings": []
+}

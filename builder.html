@@ -85,9 +85,9 @@ legend { font-size:.85rem; font-weight:600; padding:0 6px; }
     <label>Важно для туристов (виза, документы) — по строке на пункт<textarea id="f-notes" rows="2" placeholder="треб. виза"></textarea></label>
     <label>Сколько лететь — для фразы «… в самолёте — время подготовиться»<input id="f-duration" placeholder="Пять часов"></label>
     <fieldset><legend>Направление</legend>
-      <input id="f-newcity" type="checkbox" hidden>   <!-- ставится сама: направление не совпадает с городом шаблона -->
       <label>Куда едет группа — страна или город<input id="f-city" placeholder="Вьетнам"></label>
       <p class="muted" id="dest-sum" style="margin-top:-4px"></p>
+      <label>Курс для конвертера: сколько местной валюты за 1 ₪<input id="f-rate" inputmode="decimal" placeholder="подставится сам, если есть интернет"></label>
       <details><summary class="muted" style="cursor:pointer;margin-bottom:8px">Проверить, как название встанет во фразы</summary>
       <div class="grid">
         <label>Погода … в день прилёта<input id="f-city-prep" data-auto placeholder="во Вьетнаме"></label>
@@ -95,6 +95,8 @@ legend { font-size:.85rem; font-weight:600; padding:0 6px; }
         <label>Время подготовиться к …<input id="f-city-dat" data-auto placeholder="Вьетнаму"></label>
         <label>Часовой пояс — по какой стране считать «сегодня»<select id="f-tz" data-auto></select></label>
         <label>Валюта (знак)<input id="f-cur" data-auto placeholder="₫"></label>
+        <label>Валюта (код)<input id="f-cur-code" data-auto placeholder="VND"></label>
+        <label>Валюта — как называть в конвертере<input id="f-cur-name" data-auto placeholder="Донги"></label>
         <label>Флаг<input id="f-flag" data-auto placeholder="🇻🇳"></label>
       </div></details>
     </fieldset>
@@ -434,24 +436,34 @@ function setTz(tz) {
   }
   sel.value = tz || "";
 }
-const AUTO_IDS = ["f-city-prep", "f-city-gen", "f-city-dat", "f-tz", "f-cur", "f-flag"];
+const AUTO_IDS = ["f-city-prep", "f-city-gen", "f-city-dat", "f-tz", "f-cur", "f-flag", "f-cur-code", "f-cur-name"];
+// Код валюты по направлению и название для конвертера
+const CUR_CODE = { "вьетнам": "VND", "италия": "EUR", "рим": "EUR", "франция": "EUR", "париж": "EUR", "испания": "EUR", "португалия": "EUR",
+  "германия": "EUR", "австрия": "EUR", "швейцария": "CHF", "нидерланды": "EUR", "голландия": "EUR", "бельгия": "EUR", "чехия": "CZK", "прага": "CZK",
+  "венгрия": "HUF", "будапешт": "HUF", "греция": "EUR", "черногория": "EUR", "хорватия": "EUR", "албания": "ALL", "норвегия": "NOK", "финляндия": "EUR",
+  "лапландия": "EUR", "исландия": "ISK", "великобритания": "GBP", "англия": "GBP", "шотландия": "GBP", "лондон": "GBP", "япония": "JPY", "корея": "KRW",
+  "южная корея": "KRW", "китай": "CNY", "таиланд": "THB", "индия": "INR", "шри-ланка": "LKR", "грузия": "GEL", "армения": "AMD", "узбекистан": "UZS",
+  "марокко": "MAD", "мексика": "MXN", "кипр": "EUR", "мальта": "EUR", "сицилия": "EUR" };
+const CUR_NAME = { VND: "Донги", EUR: "Евро", CHF: "Франки", CZK: "Кроны", HUF: "Форинты", ALL: "Леки", NOK: "Кроны", ISK: "Кроны", GBP: "Фунты",
+  JPY: "Иены", KRW: "Воны", CNY: "Юани", THB: "Баты", INR: "Рупии", LKR: "Рупии", GEL: "Лари", AMD: "Драмы", UZS: "Сумы", MAD: "Дирхамы", MXN: "Песо", USD: "Доллары" };
 const touched = new Set();    // поля, которые человек поправил руками — их больше не перезаписываем
 AUTO_IDS.forEach(id => $(id).addEventListener("input", () => touched.add(id)));
 function fillDestination() {
   const name = val("f-city");
-  // Другое направление — значит, лондонское содержимое (места, метро, викторина, памятка) этому туру не подходит
-  $("f-newcity").checked = !!name && BASE && normCity(name) !== normCity(BASE.city.name);
   if (!name) { $("dest-sum").textContent = ""; return; }
   const known = DEST[name.toLowerCase()];
   // Нет в справочнике: падежи — по правилам, пояс — из таблицы городов (если город там есть),
   // валюту и флаг оставляем пустыми, чтобы не остались от прошлого направления
-  const forms = known || [...declineRu(name), guessTz(name), "", ""];
+  const forms = known ? [...known] : [...declineRu(name), guessTz(name), "", ""];   // копия: справочник не меняем
+  const code = CUR_CODE[name.toLowerCase()] || "";
+  forms[6] = code; forms[7] = CUR_NAME[code] || "";
   // Пояс не нашёлся по названию — берём его из города прилёта рейса туда («Милан» → Италия)
   if (!forms[3]) { const outLegs = LEGS.out.filter(l => l.to); forms[3] = outLegs.length ? guessTz(outLegs[outLegs.length - 1].to) : ""; }
   AUTO_IDS.forEach((id, i) => { if (touched.has(id)) return; if (id === "f-tz") setTz(forms[i]); else $(id).value = forms[i] || ""; });
   $("dest-sum").textContent = `Во фразах приложения: «Погода ${val("f-city-prep")}», «далеко от ${val("f-city-gen")}», «подготовиться к ${val("f-city-dat")}».`
     + (known ? "" : " Названия нет в справочнике — проверьте формы, часовой пояс и валюту ниже.");
   if (!known) document.querySelector("#trip-card details").open = true;   // раскрываем, чтобы проверили
+  loadRate();
 }
 $("f-city").addEventListener("input", fillDestination);
 
@@ -505,6 +517,21 @@ document.addEventListener("click", e => {
   if (del) { HOTELS.splice(+del.closest("[data-hotel]").dataset.hotel, 1); renderHotels(); }
 });
 $("f-start").addEventListener("change", checkHotels);
+
+/* Курс валюты — сами, из бесплатного сервиса курсов (open.er-api.com, без ключа).
+   Берём «сколько местных за 1 шекель» — так удобнее для донгов и иен. Не получилось — человек впишет сам. */
+let rateFor = "";
+async function loadRate() {
+  const code = val("f-cur-code").toUpperCase();
+  if (!code || code === rateFor || mine("f-rate")) return;
+  rateFor = code;
+  try {
+    const r = await (await fetch("https://open.er-api.com/v6/latest/ILS")).json();
+    const v = r && r.rates && r.rates[code];
+    if (v && !mine("f-rate")) $("f-rate").value = v >= 10 ? Math.round(v) : +v.toFixed(4);
+  } catch { /* нет сети — оставим поле пустым */ }
+}
+$("f-cur-code").addEventListener("change", () => { rateFor = ""; loadRate(); });
 
 /* =========================================================
    РЕЙСЫ С ПЕРЕСАДКАМИ
@@ -585,34 +612,27 @@ function buildTrip() {
   if (!start) throw new Error("Укажите дату начала тура.");
   const total = Math.max(...parsed.days.map(d => d.to));
   const end = addDays(start, total - 1);
-  const city = val("f-city") || T.city.name;
+  const city = val("f-city");
   if (!val("f-tz")) {
     const name = val("f-city"), outLegs = LEGS.out.filter(l => l.to);
     setTz((DEST[name.toLowerCase()] || [])[3] || guessTz(name) || (outLegs.length ? guessTz(outLegs[outLegs.length - 1].to) : ""));
   }
-  if ($("f-newcity").checked && !val("f-tz")) {
+  if (!val("f-tz")) {
     document.querySelector("#trip-card details").open = true;
     throw new Error("Направление: выберите страну в списке «Часовой пояс». По ней приложение понимает, какой день программы сегодня (во Вьетнаме, например, полночь наступает на 5 часов раньше, чем в Израиле).");
   }
   const tz = val("f-tz") || T.tz;
 
-  if ($("f-newcity").checked) {
-    // Лондонское содержимое к другому городу не относится
-    // и разговорник: он пишется под язык страны (британский к Италии не подходит)
-    Object.assign(T, { places: [], lines: [], walks: [], contacts: [], tips: [], apps: [], phrases: [], phrasesBasics: [] });
-    delete T.weatherTease;
-    T.quiz = { ...T.quiz, title: `Знаешь ли ты ${city}?`, questions: [] };
-    T.help = { backToHotel: "Если связи нет — возвращайтесь в отель: нажмите «Показать таксисту».", theft: [], links: [] };
-    T.shelves = { season: null, eveningCats: [], eveningSub: "" };
-    T.transport = { colors: {}, defaultLine: null, altHome: null };
-    T.city = { name: city, gen: val("f-city-gen") || city, dat: val("f-city-dat") || city, prep: val("f-city-prep") || "в " + city, flag: val("f-flag"), mapSuffix: city };
-    T.hotel = {};
-  }
+  if (!city) throw new Error("Направление: напишите, куда едет группа (страна или город).");
+  T.city = { name: city, gen: val("f-city-gen") || city, dat: val("f-city-dat") || city, prep: val("f-city-prep") || "в " + city, flag: val("f-flag"), mapSuffix: city };
   T.title = val("f-title") || T.title;
   T.start = start; T.end = end; T.tz = tz;
   T.eyebrow = [`${fmtDate(start).replace(/^\S+\s/, "")} – ${fmtDate(end).replace(/^\S+\s/, "")}`, val("f-agency"), val("f-guide") && "гид " + val("f-guide")].filter(Boolean).join(" · ");
   T.guide = { name: val("f-guide"), phone: val("f-guide-phone") };
-  T.currency = { ...T.currency, symbol: val("f-cur") || T.currency.symbol };
+  // Валюта. В trip.json курс хранится как «шекелей за 1 местную» (так считает конвертер)
+  const perShekel = parseFloat(val("f-rate").replace(",", "."));
+  T.currency = { ...T.currency, symbol: val("f-cur"), code: val("f-cur-code").toUpperCase(), name: val("f-cur-name"),
+                 rate: perShekel > 0 ? 1 / perShekel : null };
 
   // Отели: список по датам. Пустой список — «отели сообщат позже»
   const hotels = HOTELS.filter(h => h.name.trim()).map(h => {
@@ -623,7 +643,7 @@ function buildTrip() {
     return o;
   });
   if (hotels.some(h => !h.from || !h.to)) throw new Error("Отели: у каждого отеля укажите даты заезда и выезда.");
-  if (hotels.length || $("f-newcity").checked) { T.hotels = hotels; delete T.hotel; }
+  T.hotels = hotels;
 
   // Рейсы: сегменты + краткая сводка направления (её читает обратный отсчёт и время сбора в аэропорту)
   const home = T.home.tz;
@@ -649,6 +669,7 @@ function buildTrip() {
   };
   const tz0 = tz;
   T.flights = { out: direction("out", start), back: direction("back", end), durationText: val("f-duration") || T.flights.durationText };
+  if (!T.flights.out || !T.flights.back) throw new Error("Рейсы: укажите хотя бы время вылета туда и обратно (можно без номеров).");
   for (const dir of ["out", "back"]) {
     const d = T.flights[dir];
     if (d && d.legs && d.legs.some(l => !l.dep)) throw new Error(`Рейсы ${dir === "out" ? "туда" : "обратно"}: укажите время вылета у каждого сегмента.`);
@@ -666,10 +687,8 @@ function buildTrip() {
       });
     }
   });
-  // Место сбора в аэропорту: у каждого агентства своё. Для «не Лондона» лондонское не тянем
-  if (val("f-airport") || $("f-newcity").checked) {
-    T.airport = { ...T.airport, name: val("f-airport") || "Бен-Гурион", where: "", short: "", q: "Ben Gurion Airport" };
-  }
+  // Место сбора в аэропорту: у каждого агентства своё
+  if (val("f-airport")) T.airport.name = val("f-airport");
   if (val("f-airport-h")) T.airport.hoursBefore = +val("f-airport-h");
   T.warnings = $("f-notes").value.split("\n").map(s => s.trim()).filter(Boolean);
   T.options = [];       // карточки опций с ценами — следующий шаг конструктора
@@ -700,10 +719,9 @@ $("download").addEventListener("click", () => withTrip(T => {
 fillTzList();
 $("f-start").addEventListener("change", fillTzList);
 
-// Основа — текущий trip.json; подсказки в полях города — из него же
-fetch("trip.json").then(r => r.json()).then(T => {
-  BASE = T;
-}).catch(() => alertBox("Не удалось загрузить trip.json — откройте конструктор с того же сайта, что и приложение."));
+// Основа нового тура — чистый шаблон base.json: интерфейс, чек-лист, настройки «дома». Ни одного города.
+fetch("base.json").then(r => r.json()).then(T => { BASE = T; })
+  .catch(() => alertBox("Не удалось загрузить base.json — откройте конструктор с того же сайта, что и приложение."));
 </script>
 </body>
 </html>

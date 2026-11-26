@@ -1,7 +1,7 @@
 {
-  "name": "Лондон на Рождество — карманный гид",
-  "short_name": "Лондон",
-  "description": "Программа тура, места, помощь и полезное для поездки 3–9 декабря",
+  "name": "Карманный гид",
+  "short_name": "Гид",
+  "description": "Программа тура, отели, помощь и полезное — для группы в поездке",
   "lang": "ru",
   "start_url": "/#today",
   "scope": "/",
@@ -9,8 +9,21 @@
   "background_color": "#eef1f5",
   "theme_color": "#142033",
   "icons": [
-    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
   ]
 }

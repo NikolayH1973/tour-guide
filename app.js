@@ -150,7 +150,7 @@ function optionsHtml() {
   return `<article class="card" id="options">
     <h3>${tx("k36")}</h3>
     <p class="small muted">${tx("k37")}</p>
-    <p class="small">${tx("k38")}</p>
+    <p class="small">${TOUR.optionsHow || tx("k38")}</p>
     ${signupBtn(tx("k29"), "go-btn")}
     <p class="small muted">${tx("k39")}</p>
     ${TOUR.options.map(o => {
@@ -428,7 +428,7 @@ function renderProgram() {
         <p class="small muted">${i === 0 ? tx("k114", cap(TOUR.city.prep)) : tx("k84")}: ${d.meeting.time ? esc(d.meeting.time) + " · " : ""}${d.meeting.wa ? esc(waText(d.meeting).replace(tx("k86"), tx("k87"))) : esc(d.meeting.place)}</p>
         <button type="button" class="btn ghost" data-pv-go="${d.date}">${tx("k116")}</button>
       </article>`).join("")}
-    ${optionsHtml()}
+    ${TOUR.options.length ? optionsHtml() : ""}
   </div>`;
 }
 
@@ -802,7 +802,7 @@ function placesList(title, list, top) {
     ${nf ? `<p class="small t-near">${tx("k201")}</p>` : ""}
     ${top || ""}
     <div class="plist">${list.map(p => placeRow(p, nf)).join("")}</div>
-    <p class="small muted">${tx("k204", nf ? tx("k202") : tx("k203"))}</p>
+    <p class="small muted">${tx("k204", nf ? tx("k202") : tx("k203"), TOUR.hoursNote || tx("k223"))}</p>
   </div>`;
 }
 
@@ -853,11 +853,11 @@ function placePage(p) {
       </div>
       ${routeHtml(p)}
       <div class="alt-links">
-        ${p.ll ? `<a class="maplink" href="${cmLink(p.ll, p.q)}" target="_blank" rel="noopener">${tx("k218")}</a>` : ""}
+        ${p.ll && TOUR.citymapper ? `<a class="maplink" href="${cmLink(p.ll, p.q)}" target="_blank" rel="noopener">${tx("k218")}</a>` : ""}
         ${IS_APPLE ? `<a class="maplink" href="${applePlace(p.q)}" target="_blank" rel="noopener">${tx("k219")}</a>` : ""}
       </div>
     </article>
-    <p class="small muted">${tx("k223")}</p>
+    <p class="small muted">${TOUR.hoursNote || tx("k223")}</p>
   </div>`;
 }
 
@@ -1262,7 +1262,7 @@ function renderHelp() {
       </div>
       <p class="hint">${tx("k326")}</p>
       <div class="alt-links">
-        ${h.ll ? `<a class="maplink" href="${cmLink(h.ll, h.name)}" target="_blank" rel="noopener">${tx("k327")}</a>` : ""}
+        ${h.ll && TOUR.citymapper ? `<a class="maplink" href="${cmLink(h.ll, h.name)}" target="_blank" rel="noopener">${tx("k327")}</a>` : ""}
         ${IS_APPLE ? `<a class="maplink" href="${applePlace(h.name + ", " + h.address)}" target="_blank" rel="noopener">${tx("k317")}</a>` : ""}
       </div>
     </article>`}
@@ -1316,7 +1316,9 @@ function renderHelp() {
 const PHRASES_N = TOUR.phrases.reduce((n, t) => n + t.items.length, 0);
 function renderTools() {
   const c = TOUR.currency;
-  const rate = store.get("rate", c.rate);
+  // Курс, поправленный туристом, — отдельно для каждой валюты (иначе на другом туре подтянулся бы курс фунта).
+  // Для «мелких» валют (донг, иена) курс показываем наоборот: «1 ₪ = 7 000 ₫», а не «1 ₫ = 0,00014 ₪».
+  const rate = store.get("rate:" + c.code, c.rate), INV = rate > 0 && rate < 0.1;
   const list = TOUR.checklist, done = store.get("checks", []);
   const standalone = (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true;
   $("#v-tools").innerHTML = `<div class="stack">
@@ -1333,11 +1335,11 @@ function renderTools() {
       <ul class="items small">
         <li><span>${tx("k347")}</span></li>
         <li><span>${tx("k348", TOUR.days.length, plural(TOUR.days.length, tx("k93"), tx("k94"), tx("k95")))}</span></li>
-        <li><span>${tx("k349")}</span></li>
-        <li><span>${tx("k350")}</span></li>
-        <li><span>${tx("k351")}</span></li>
+        ${TOUR.places.length ? `<li><span>${tx("k349")}</span></li>
+        <li><span>${tx("k350")}</span></li>` : ""}
+        ${TOUR.lines.length ? `<li><span>${tx("k351")}</span></li>` : ""}
         <li><span>${tx("k352")}</span></li>
-        <li><span>${tx("k353")}</span></li>
+        ${PHRASES_N ? `<li><span>${tx("k353")}</span></li>` : ""}
         <li><span>${tx("k354")}</span></li>
         <li><span>${tx("k355")}</span></li>
         <li><span>${tx("k356", TOUR.city.prep, TOUR.home.prep)}</span></li>
@@ -1363,16 +1365,16 @@ function renderTools() {
       </div>`).join("")}
       ${IS_APPLE ? "" : `<p class="hint">${tx("k344")}</p>`}
     </article>` : ""}
-    <article class="card">
+    ${rate > 0 ? `<article class="card">
       <h3>${tx("k365")}</h3>
       <p class="hint">${tx("k366")}</p>
       <div class="conv">
-        <div class="field"><label for="in-gbp">${tx("k367")}</label><div class="inp"><span>${c.symbol}</span><input id="in-gbp" inputmode="decimal" placeholder="0" autocomplete="off"></div></div>
-        <div class="field"><label for="in-ils">${tx("k368")}</label><div class="inp"><span>${c.homeSymbol}</span><input id="in-ils" inputmode="decimal" placeholder="0" autocomplete="off"></div></div>
+        <div class="field"><label for="in-gbp">${esc(c.name || c.code)}</label><div class="inp"><span>${c.symbol}</span><input id="in-gbp" inputmode="decimal" placeholder="0" autocomplete="off"></div></div>
+        <div class="field"><label for="in-ils">${esc(c.homeName || tx("k368"))}</label><div class="inp"><span>${c.homeSymbol}</span><input id="in-ils" inputmode="decimal" placeholder="0" autocomplete="off"></div></div>
       </div>
       <div class="quick" id="quick"></div>
-      <div class="rate-row"><label for="in-rate">${tx("k369", c.symbol)}</label><input id="in-rate" inputmode="decimal" value="${rate}"> ${c.homeSymbol} <span>${tx("k370")}</span></div>
-    </article>
+      <div class="rate-row"><label for="in-rate">${tx("k369", INV ? c.homeSymbol : c.symbol)}</label><input id="in-rate" inputmode="decimal" value="${INV ? Math.round(1 / rate) : rate}" data-inv="${INV ? 1 : ""}"> ${INV ? c.symbol : c.homeSymbol} <span>${tx("k370")}</span></div>
+    </article>` : ""}
     <article class="card">
       <h3>${tx("k371")}</h3>
       <div>${list.map((t, i) => `<label class="check"><input type="checkbox" data-ck="${i}" ${done.includes(i) ? "checked" : ""}><span>${esc(t)}</span></label>`).join("")}</div>
@@ -1396,15 +1398,23 @@ function toolsPlay() {
 
 function wireConverter() {
   const g = $("#in-gbp"), s = $("#in-ils"), r = $("#in-rate");
+  if (!g) return;                                           // курса нет — конвертер не показан
   const num = v => parseFloat(String(v).replace(",", "."));
   const round = v => (Math.round(v * 100) / 100).toString();
-  const rate = () => { const v = num(r.value); return v > 0 ? v : TOUR.currency.rate; };
+  const inv = !!r.dataset.inv;                                // поле курса показано «1 ₪ = … местных»
+  const rate = () => { const v = num(r.value); return v > 0 ? (inv ? 1 / v : v) : TOUR.currency.rate; };
+  // Красивое число из ряда 1–2–5 (5, 10, 20, 50 … 100 000, 200 000): ближайшее по порядку величины
+  const nice = x => { const p = 10 ** Math.floor(Math.log10(x)); return [p, 2 * p, 5 * p, 10 * p].reduce((a, b) => Math.abs(Math.log(b / x)) < Math.abs(Math.log(a / x)) ? b : a); };
+  const fmtN = v => v.toLocaleString("ru-RU");
   const quick = () => {
-    $("#quick").innerHTML = [5, 10, 20, 50].map(v => `<div>${TOUR.currency.symbol}${v} ≈ ${Math.round(v * rate())}${TOUR.currency.homeSymbol}</div>`).join("");
+    const c = TOUR.currency;
+    // местные суммы, примерно равные 20, 50, 100 и 200 шекелям: £5…£50, а для донгов — 100 000…
+    const sums = [...new Set([20, 50, 100, 200].map(sh => nice(sh / rate())))];
+    $("#quick").innerHTML = sums.map(v => `<div>${c.symbol}${fmtN(v)} ≈ ${fmtN(Math.round(v * rate()))}${c.homeSymbol}</div>`).join("");
   };
   g.addEventListener("input", () => { const v = num(g.value); s.value = isNaN(v) ? "" : round(v * rate()); });
   s.addEventListener("input", () => { const v = num(s.value); g.value = isNaN(v) ? "" : round(v / rate()); });
-  r.addEventListener("input", () => { if (num(r.value) > 0) store.set("rate", num(r.value)); quick(); g.dispatchEvent(new Event("input")); });
+  r.addEventListener("input", () => { if (num(r.value) > 0) store.set("rate:" + TOUR.currency.code, rate()); quick(); g.dispatchEvent(new Event("input")); });
   quick();
 }
 
