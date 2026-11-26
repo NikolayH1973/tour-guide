@@ -63,6 +63,23 @@ function airportTime() {
   const t = (hh * 60 + mm - TOUR.airport.hoursBefore * 60 + 1440) % 1440;   // +1440: не уйти в минус до полуночи
   return String(Math.floor(t / 60)).padStart(2, "0") + ":" + String(t % 60).padStart(2, "0");
 }
+// Подсказка о времени сбора — считается из рейса, а не написана руками:
+//   сбор с 00:00 до 06:00 → «выезжать в ночь со среды на четверг»;
+//   сбор раньше полуночи, а вылет после → сбор накануне вылета.
+function airportTip() {
+  const toMin = t => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
+  const dep = toMin(TOUR.flights.out.dep), meet = toMin(airportTime());
+  const day = new Date(TOUR.start + "T12:00:00Z").getUTCDay();          // 0 — воскресенье
+  if (meet > dep) {                                                     // перешли через полночь назад
+    const prev = new Date(Date.parse(TOUR.start + "T12:00:00Z") - 864e5).toISOString().slice(0, 10);
+    return `<p class="tip">${tx("airportEve", wday(prev), fmt(prev), airportTime())}</p>`;
+  }
+  if (meet < 6 * 60) {
+    const gen = tx("wdGen").split("|"), acc = tx("wdAcc").split("|");
+    return `<p class="tip">${tx("k104", gen[(day + 6) % 7], acc[day])}</p>`;
+  }
+  return "";
+}
 function airportHtml() {
   const a = TOUR.airport, q = encodeURIComponent(a.q);
   // Иврит внутри русского текста оборачиваем в <bdi>: он пишется справа налево и иначе «перемешает» кавычки
@@ -238,6 +255,7 @@ const legsOf = dir => dir && dir.legs && dir.legs.length ? dir.legs : (dir ? [di
 async function loadFlights(force) {
   if (!/^https?:$/.test(location.protocol)) return;       // открыто как файл — посредника нет
   for (const f of [...legsOf(TOUR.flights.out), ...legsOf(TOUR.flights.back)]) {
+    if (!/\d/.test(f.no || "")) continue;                  // нет номера рейса — спрашивать нечего
     if (flightWindow(f) !== "live") continue;              // вне окна не тратим запросы
     if (FL_TEST !== null && f !== legsOf(TOUR.flights.out)[0]) continue; // в тесте карточка только BA405 — второй запрос не нужен
     const last = FL[f.no];
@@ -279,6 +297,7 @@ function flightStatusHtml(d) {
     ${d.status === "cancelled" ? `<p class="tip">${tx("k66")}</p>` : ""}`;
 }
 function flightCard(f) {
+  if (!/\d/.test(f.no || "")) return "";        // номера ещё нет (агентство сообщит позже)
   const win = flightWindow(f);
   if (win === "over") return "";
   const saved = FL[f.no], d = saved && saved.data;
@@ -357,8 +376,9 @@ function renderToday() {
       <article class="card">
         <h3>${tx("k103", wday(TOUR.start), fmt(TOUR.start))}</h3>
         ${airportHtml()}
-        <p class="tip">${tx("k104")}</p>
+        ${airportTip()}
       </article>
+      ${(TOUR.warnings || []).length ? `<article class="card"><h3>${tx("warnTitle")}</h3><ul class="items">${TOUR.warnings.map(w => `<li><span>${esc(w)}</span></li>`).join("")}</ul></article>` : ""}
       ${legsOf(TOUR.flights.out).map(flightCard).join("")}
       <article class="card">
         <h3>${tx("k105", cnt, list.length)}</h3>
