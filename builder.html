@@ -133,7 +133,7 @@ const SECTIONS = [                       // порядок важен: «НЕ В
   ["included",    /^\s*(В СТОИМОСТЬ )?(ТУРА )?ВКЛЮЧЕНО\s*:?/i],
   ["info",        /^\s*(ИНФОРМАЦИЯ|ВАЖНО)\s*:?\s*$/i],
 ];
-const DURATION_RE = /(\d{1,2})\s*(?:ДНЕЙ|ДНЯ|ДЕНЬ)\b/i;
+const DURATION_RE = /(\d{1,2})\s*(?:ДНЕЙ|ДНЯ|ДЕНЬ)(?![А-Яа-яЁё])/i;   // не \b: в JS он не видит русских букв
 const OPTION_RE = /за\s+дополнительную\s+плату|за\s+доплату|доплат/i;
 
 function parseProgram(text) {
@@ -246,7 +246,8 @@ function parseDeparture(text) {
     let m;
     if (!line) continue;
     // В карточке выезда под датами идёт название тура («Вьетнам») — забираем его, а не оставляем в тексте
-    if (afterDates && !/^(Гид|Примечание|Информация|Вылет|Возврат)\b/i.test(line) && !DATES_RE.test(line)) { out.title = line; afterDates = false; continue; }
+    if (afterDates && /^\d{1,2}\s*(?:день|дня|дней)(?![А-Яа-яЁё])/i.test(line)) continue;   // «17 дней» — длительность, не название
+    if (afterDates && !/^(?:Гид|Примечание|Информация|Вылет|Возврат)(?![А-Яа-яЁё])/i.test(line) && !DATES_RE.test(line)) { out.title = line; afterDates = false; continue; }
     afterDates = false;
     if ((m = line.match(DATES_RE))) {
       const m2 = MONTHS_RU.indexOf(m[4].toLowerCase()) + 1, m1 = m[2] ? MONTHS_RU.indexOf(m[2].toLowerCase()) + 1 : m2;
@@ -291,21 +292,26 @@ $("parse").addEventListener("click", () => {
   const head = parsed.preface[0] || "";
   const hm = head.match(/^(?:Организованн\S*|Семейн\S*)\s+тур\S*\s+(?:от\s+)?(.+)$/i);
   if (hm && dep.title && hm[1].endsWith(dep.title)) {
-    if (!$("f-agency").value) $("f-agency").value = hm[1].slice(0, -dep.title.length).trim();
-    if (!$("f-title").value) $("f-title").value = dep.title;
+    if (!mine("f-agency")) $("f-agency").value = hm[1].slice(0, -dep.title.length).trim();
+    if (!mine("f-title")) $("f-title").value = dep.title;
   }
-  if (!$("f-title").value) $("f-title").value = dep.title || head;
+  if (!mine("f-title")) $("f-title").value = dep.title || head;
   renderDays();
   $("checks-card").scrollIntoView({ behavior: "smooth" });
 });
 
+// Поля, которые человек ввёл сам на этой странице. Значения, которые браузер вернул
+// после обновления страницы, сюда не попадают — их можно перезаписать данными из текста.
+const TYPED = new Set();
+document.addEventListener("input", e => { if (e.isTrusted && e.target.id) TYPED.add(e.target.id); });
+const mine = id => TYPED.has(id);
 // Заполняем форму из карточки выезда. То, что человек уже ввёл сам, не трогаем.
 function applyDeparture(dep) {
-  if (dep.start && !$("f-start").value) $("f-start").value = dep.start;
-  if (dep.title && !$("f-city").value) $("f-city").value = dep.title;
+  if (dep.start && !mine("f-start")) $("f-start").value = dep.start;
+  if (dep.title && !mine("f-city")) $("f-city").value = dep.title;
   if ($("f-city").value) fillDestination();   // даже если браузер сам вернул старое значение в поле
-  if (dep.guide && !$("f-guide").value) $("f-guide").value = dep.guide;
-  if (dep.notes.length && !$("f-notes").value) $("f-notes").value = dep.notes.join("\n");
+  if (dep.guide && !mine("f-guide")) $("f-guide").value = dep.guide;
+  if (dep.notes.length && !mine("f-notes")) $("f-notes").value = dep.notes.join("\n");
   const end = dep.end || (dep.start && parsed.days.length ? addDays(dep.start, Math.max(...parsed.days.map(d => d.to)) - 1) : "");
   for (const dir of ["out", "back"]) {
     const legs = dep.legs[dir];
@@ -594,6 +600,7 @@ function buildTrip() {
     // Лондонское содержимое к другому городу не относится
     // и разговорник: он пишется под язык страны (британский к Италии не подходит)
     Object.assign(T, { places: [], lines: [], walks: [], contacts: [], tips: [], apps: [], phrases: [], phrasesBasics: [] });
+    delete T.weatherTease;
     T.quiz = { ...T.quiz, title: `Знаешь ли ты ${city}?`, questions: [] };
     T.help = { backToHotel: "Если связи нет — возвращайтесь в отель: нажмите «Показать таксисту».", theft: [], links: [] };
     T.shelves = { season: null, eveningCats: [], eveningSub: "" };

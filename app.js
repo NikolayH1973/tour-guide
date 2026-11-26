@@ -91,7 +91,7 @@ function airportHtml() {
       <span class="time">${airportTime()}</span>
       <span class="place">${tx("k21", esc(a.name))}${flightsPrelim() ? ` <span class="muted">(${tx("prelimShort")})</span>` : ""}</span>
       <span></span>
-      <span class="small">${where}<br><span class="muted">${tx("k22", TOUR.home.dat, a.hoursBefore, TOUR.flights.out.dep)}</span></span>
+      <span class="small">${where ? where + "<br>" : ""}<span class="muted">${tx("k22", TOUR.home.dat, a.hoursBefore, TOUR.flights.out.dep)}</span></span>
     </div>
     <div class="btn-row">
       <a class="btn ghost" href="https://waze.com/ul?q=${q}&navigate=yes" target="_blank" rel="noopener">🚗 Waze</a>
@@ -375,7 +375,7 @@ function renderToday() {
         <div><span class="big-num">${n}</span> <span class="muted">${plural(n,tx("k93"),tx("k94"),tx("k95"))}</span></div>
         <p>${f.via ? tx("k102via", f.no, f.from, f.dep, f.to, f.arr, wday(TOUR.start), fmt(TOUR.start), f.via) : tx("k102", f.no, f.from, f.dep, f.to, f.arr, wday(TOUR.start), fmt(TOUR.start))}</p>
         ${flightsPrelim() ? `<p class="small muted">${tx("prelimNote")}</p>` : ""}
-        ${WX && WX.days && WX.days[TOUR.start] ? `<div><span class="small muted">${tx("k96", TOUR.city.prep)}</span>${wxLine(TOUR.start)}</div>` : `<p class="small muted">${tx("k97")}</p>`}
+        ${WX && WX.days && WX.days[TOUR.start] ? `<div><span class="small muted">${tx("k96", TOUR.city.prep)}</span>${wxLine(TOUR.start)}</div>` : `<p class="small muted">${TOUR.weatherTease ? esc(TOUR.weatherTease) + " " : ""}${tx("k97")}</p>`}
       </article>
       <article class="card">
         <h3>${tx("k103", wday(TOUR.start), fmt(TOUR.start))}</h3>
