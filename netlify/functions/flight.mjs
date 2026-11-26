@@ -11,11 +11,22 @@
         30 участников получают один и тот же ответ, а функция и Aviationstack
         вызываются не чаще раза в 30 минут. */
 
-// Наши рейсы. dep — время вылета по расписанию с часовым поясом аэропорта
-const FLIGHTS = {
-  BA405: { date: "2026-12-03", dep: "2026-12-03T06:20:00+02:00", tz: "Asia/Jerusalem" },   // Тель-Авив → Лондон
-  BA404: { date: "2026-12-09", dep: "2026-12-09T20:30:00+00:00", tz: "Europe/London" }     // Лондон → Тель-Авив
-};
+// Наши рейсы берём из trip.json этого же сайта: тогда функция одна для всех туров,
+// а отвечает только про рейсы текущего тура (чужие номера не тратят лимит Aviationstack).
+// at — время вылета по расписанию с часовым поясом аэропорта, например 2026-12-03T06:20:00+02:00
+async function ourFlights(req) {
+  try {
+    const T = await (await fetch(new URL("/trip.json", req.url), { signal: AbortSignal.timeout(5000) })).json();
+    const map = {};
+    for (const dir of [T.flights && T.flights.out, T.flights && T.flights.back]) {
+      if (!dir) continue;
+      for (const l of (dir.legs && dir.legs.length ? dir.legs : [dir])) {
+        if (l.no && l.at) map[l.no.toUpperCase()] = { date: l.at.slice(0, 10), dep: l.at, tz: l.tz };
+      }
+    }
+    return map;
+  } catch { return {}; }
+}
 const HOUR = 3600 * 1000;
 // Проверено 23–24.11 на настоящем BA405: в 23:06 рейса в данных ещё не было (за ~7 ч), в 05:00 уже был.
 // Похоже, он появляется после полуночи по UTC (02:00 по Израилю). Поэтому окно — 5 ч до вылета:
@@ -55,7 +66,7 @@ const todayIn = tz => new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(
 export default async (req) => {
   const params = new URL(req.url).searchParams;
   const code = (params.get("f") || "").toUpperCase();
-  const cfg = FLIGHTS[code];
+  const cfg = (await ourFlights(req))[code];
   if (!cfg) return json({ state: "unknown" }, 86400);
 
   // Тестовый режим: тот же рейс, но в другой день (BA405/BA404 летают ежедневно).
@@ -95,5 +106,5 @@ export default async (req) => {
   }
 };
 
-// Адрес функции на сайте: https://london03122026.netlify.app/api/flight?f=BA405
+// Адрес функции на сайте: /api/flight?f=<номер рейса>
 export const config = { path: "/api/flight" };

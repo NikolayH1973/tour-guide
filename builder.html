@@ -93,7 +93,7 @@ legend { font-size:.85rem; font-weight:600; padding:0 6px; }
         <label>Погода … в день прилёта<input id="f-city-prep" data-auto placeholder="во Вьетнаме"></label>
         <label>Вы далеко от …<input id="f-city-gen" data-auto placeholder="Вьетнама"></label>
         <label>Время подготовиться к …<input id="f-city-dat" data-auto placeholder="Вьетнаму"></label>
-        <label>Часовой пояс<input id="f-tz" data-auto placeholder="Asia/Ho_Chi_Minh"></label>
+        <label>Часовой пояс — по какой стране считать «сегодня»<select id="f-tz" data-auto></select></label>
         <label>Валюта (знак)<input id="f-cur" data-auto placeholder="₫"></label>
         <label>Флаг<input id="f-flag" data-auto placeholder="🇻🇳"></label>
       </div></details>
@@ -381,6 +381,45 @@ function declineRu(name) {
   if (/ь$/.test(low)) return [v + cut(1) + "и", cut(1) + "и", cut(1) + "и"];
   return [v + w + "е", w + "а", w + "у"];                                       // Хошимин → в Хошимине
 }
+/* Часовые пояса — списком стран по-русски. Внутри хранится код (Europe/Rome),
+   но человеку его видеть не нужно. В подписи — разница с Гринвичем на дату начала тура. */
+const TZ_LIST = [
+  ["Europe/London", "Великобритания, Ирландия, Португалия"],
+  ["Europe/Paris", "Франция, Италия, Испания, Германия, Австрия, Швейцария, Нидерланды, Бельгия, Чехия, Венгрия, Польша, Хорватия, Черногория, Албания, Норвегия"],
+  ["Europe/Athens", "Греция, Кипр, Финляндия, Болгария, Румыния, страны Балтии"],
+  ["Europe/Istanbul", "Турция"],
+  ["Africa/Cairo", "Египет"],
+  ["Asia/Tbilisi", "Грузия, Армения, Азербайджан"],
+  ["Asia/Dubai", "ОАЭ, Оман"],
+  ["Asia/Tashkent", "Узбекистан"],
+  ["Asia/Kolkata", "Индия, Шри-Ланка"],
+  ["Asia/Bangkok", "Таиланд, Вьетнам, Камбоджа, Лаос"],
+  ["Asia/Shanghai", "Китай, Гонконг, Тайвань, Сингапур, Бали, Филиппины"],
+  ["Asia/Tokyo", "Япония, Южная Корея"],
+  ["Africa/Casablanca", "Марокко"],
+  ["Africa/Nairobi", "Кения, Танзания, Эфиопия"],
+  ["Africa/Johannesburg", "ЮАР"],
+  ["Atlantic/Reykjavik", "Исландия"],
+  ["America/New_York", "США и Канада — восток (Нью-Йорк)"],
+  ["America/Los_Angeles", "США — запад (Лос-Анджелес)"],
+  ["America/Mexico_City", "Мексика"],
+  ["America/Argentina/Buenos_Aires", "Аргентина, Бразилия (Сан-Паулу)"]
+];
+const utcLabel = tz => "UTC" + tzOffset(tz, val("f-start") || new Date().toISOString().slice(0, 10)).replace(/:00$/, "").replace(/^\+0/, "+").replace(/^-0/, "-");
+function fillTzList() {
+  const cur = $("f-tz").value;
+  $("f-tz").innerHTML = `<option value="">— выберите страну —</option>` +
+    TZ_LIST.map(([tz, name]) => `<option value="${tz}">${esc(name)} (${utcLabel(tz)})</option>`).join("");
+  if (cur) setTz(cur);
+}
+// Пояс из справочника может быть точнее списка (Asia/Ho_Chi_Minh) — тогда добавляем его отдельной строкой
+function setTz(tz) {
+  const sel = $("f-tz");
+  if (tz && ![...sel.options].some(o => o.value === tz)) {
+    sel.add(new Option(`${val("f-city") || tz} (${utcLabel(tz)})`, tz), 1);
+  }
+  sel.value = tz || "";
+}
 const AUTO_IDS = ["f-city-prep", "f-city-gen", "f-city-dat", "f-tz", "f-cur", "f-flag"];
 const touched = new Set();    // поля, которые человек поправил руками — их больше не перезаписываем
 AUTO_IDS.forEach(id => $(id).addEventListener("input", () => touched.add(id)));
@@ -391,7 +430,9 @@ function fillDestination() {
   // Нет в справочнике: падежи — по правилам, пояс — из таблицы городов (если город там есть),
   // валюту и флаг оставляем пустыми, чтобы не остались от прошлого направления
   const forms = known || [...declineRu(name), guessTz(name), "", ""];
-  AUTO_IDS.forEach((id, i) => { if (!touched.has(id)) $(id).value = forms[i] || ""; });
+  // Пояс не нашёлся по названию — берём его из города прилёта рейса туда («Милан» → Италия)
+  if (!forms[3]) { const outLegs = LEGS.out.filter(l => l.to); forms[3] = outLegs.length ? guessTz(outLegs[outLegs.length - 1].to) : ""; }
+  AUTO_IDS.forEach((id, i) => { if (touched.has(id)) return; if (id === "f-tz") setTz(forms[i]); else $(id).value = forms[i] || ""; });
   $("dest-sum").textContent = `Во фразах приложения: «Погода ${val("f-city-prep")}», «далеко от ${val("f-city-gen")}», «подготовиться к ${val("f-city-dat")}».`
     + (known ? "" : " Названия нет в справочнике — проверьте формы, часовой пояс и валюту ниже.");
   if (!known) document.querySelector("#trip-card details").open = true;   // раскрываем, чтобы проверили
@@ -529,7 +570,10 @@ function buildTrip() {
   const total = Math.max(...parsed.days.map(d => d.to));
   const end = addDays(start, total - 1);
   const city = val("f-city") || T.city.name;
-  if ($("f-newcity").checked && !val("f-tz")) throw new Error("Направление: укажите часовой пояс (например, для Флоренции — Europe/Rome). Без него приложение перепутает «сегодняшний» день.");
+  if ($("f-newcity").checked && !val("f-tz")) {
+    document.querySelector("#trip-card details").open = true;
+    throw new Error("Направление: выберите страну в списке «Часовой пояс». По ней приложение понимает, какой день программы сегодня (во Вьетнаме, например, полночь наступает на 5 часов раньше, чем в Израиле).");
+  }
   const tz = val("f-tz") || T.tz;
 
   if ($("f-newcity").checked) {
@@ -630,6 +674,10 @@ $("download").addEventListener("click", () => withTrip(T => {
   const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: "trip.json" });
   a.click(); URL.revokeObjectURL(a.href);
 }));
+
+// Список часовых поясов: строим, когда все функции уже объявлены; при смене даты — заново (летнее/зимнее время)
+fillTzList();
+$("f-start").addEventListener("change", fillTzList);
 
 // Основа — текущий trip.json; подсказки в полях города — из него же
 fetch("trip.json").then(r => r.json()).then(T => {

@@ -511,7 +511,13 @@ function applyI18n() {
 }
 
 const getJSON = url => fetch(url).then(r => { if (!r.ok) throw new Error(url + ": HTTP " + r.status); return r.json(); });
-getJSON("trip.json")
+// ?draft — предпросмотр из конструктора: данные берём из памяти браузера, а не из trip.json
+const DRAFT = new URLSearchParams(location.search).has("draft");
+const loadTrip = () => {
+  if (DRAFT) { try { const d = JSON.parse(localStorage.getItem("tripDraft")); if (d) return Promise.resolve(d); } catch {} }
+  return getJSON("trip.json");
+};
+loadTrip()
   // Язык интерфейса задаёт тур: «один выезд — один язык»
   .then(data => getJSON("i18n/" + (data.locale || "ru") + ".json").then(dict => [data, dict]))
   .then(([data, dict]) => {

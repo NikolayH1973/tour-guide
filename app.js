@@ -58,6 +58,9 @@ function placeHtml(m) {
 }
 
 /* Сбор в аэропорту Бен-Гурион: время считаем из времени вылета, чтобы при смене рейса поправить одно место */
+// Рейсы «предварительно», пока нет номеров: время взято из программы агентства, билетов ещё нет.
+// Как только в trip.json появятся номера рейсов, пометки исчезнут сами.
+const flightsPrelim = () => !legsOf(TOUR.flights.out).some(l => /\d/.test(l.no || ""));
 function airportTime() {
   const [hh, mm] = TOUR.flights.out.dep.split(":").map(Number);
   const t = (hh * 60 + mm - TOUR.airport.hoursBefore * 60 + 1440) % 1440;   // +1440: не уйти в минус до полуночи
@@ -86,7 +89,7 @@ function airportHtml() {
   const where = esc(a.where).replace("נקודת מפגש", '<bdi dir="rtl" lang="he" style="white-space:nowrap">נקודת מפגש</bdi>');
   return `<div class="meet">
       <span class="time">${airportTime()}</span>
-      <span class="place">${tx("k21", esc(a.name))}</span>
+      <span class="place">${tx("k21", esc(a.name))}${flightsPrelim() ? ` <span class="muted">(${tx("prelimShort")})</span>` : ""}</span>
       <span></span>
       <span class="small">${where}<br><span class="muted">${tx("k22", TOUR.home.dat, a.hoursBefore, TOUR.flights.out.dep)}</span></span>
     </div>
@@ -371,6 +374,7 @@ function renderToday() {
         <span class="eyebrow">${tx("k101")}</span>
         <div><span class="big-num">${n}</span> <span class="muted">${plural(n,tx("k93"),tx("k94"),tx("k95"))}</span></div>
         <p>${f.via ? tx("k102via", f.no, f.from, f.dep, f.to, f.arr, wday(TOUR.start), fmt(TOUR.start), f.via) : tx("k102", f.no, f.from, f.dep, f.to, f.arr, wday(TOUR.start), fmt(TOUR.start))}</p>
+        ${flightsPrelim() ? `<p class="small muted">${tx("prelimNote")}</p>` : ""}
         ${WX && WX.days && WX.days[TOUR.start] ? `<div><span class="small muted">${tx("k96", TOUR.city.prep)}</span>${wxLine(TOUR.start)}</div>` : `<p class="small muted">${tx("k97")}</p>`}
       </article>
       <article class="card">
@@ -408,7 +412,7 @@ function renderProgram() {
         <h3>${esc(d.title)}</h3>
         ${wxLine(d.date, true)}
         ${dayItems(d)}
-        ${i === 0 ? `<p class="small muted">${tx("k113", TOUR.home.prep, airportTime(), esc(TOUR.airport.name), TOUR.airport.short ? ", " + esc(TOUR.airport.short) : "")}</p>` : ""}
+        ${i === 0 ? `<p class="small muted">${tx("k113", TOUR.home.prep, airportTime() + (flightsPrelim() ? ` (${tx("prelimShort")})` : ""), esc(TOUR.airport.name), TOUR.airport.short ? ", " + esc(TOUR.airport.short) : "")}</p>` : ""}
         <p class="small muted">${i === 0 ? tx("k114", cap(TOUR.city.prep)) : tx("k84")}: ${d.meeting.time ? esc(d.meeting.time) + " · " : ""}${d.meeting.wa ? esc(waText(d.meeting).replace(tx("k86"), tx("k87"))) : esc(d.meeting.place)}</p>
         <button type="button" class="btn ghost" data-pv-go="${d.date}">${tx("k116")}</button>
       </article>`).join("")}
