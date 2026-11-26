@@ -34,6 +34,21 @@ function plural(n, one, few, many) {
 
 let preview = null; // дата для предпросмотра (до поездки)
 
+/* ===== Отели по датам =====
+   Тур по нескольким городам: TOUR.hotels = [{ name, address, from, to, … }],
+   from — дата заезда, to — дата выезда. Тогда TOUR.hotel сам возвращает отель «на сегодня»,
+   и весь остальной код (такси, «Я потерялся», «рядом со мной») ничего менять не должен.
+   До поездки — первый отель, после — последний. Отели ещё неизвестны — пустой объект. */
+function hotelOn(date) {
+  const list = TOUR.hotels || [];
+  if (!list.length) return {};
+  return list.find(h => date >= h.from && date < h.to)
+      || (date < list[0].from ? list[0] : list.filter(h => h.from <= date).pop() || list[0]);
+}
+if (Array.isArray(TOUR.hotels)) {
+  Object.defineProperty(TOUR, "hotel", { get: () => hotelOn(preview || tripToday()), configurable: true });
+}
+
 // Подпись сбора: известное место — как есть; иначе — что гид пришлёт в WhatsApp
 const waText = m => `${tx("k20", m.wa)}`;
 function placeHtml(m) {
@@ -138,7 +153,8 @@ function optionsHtml() {
    Один запрос на 16 дней для района отеля. Ответ сохраняем в телефоне:
    без интернета показываем последний прогноз с пометкой, когда он получен. */
 // Без координат отеля прогноз не запрашиваем (у нового тура их может ещё не быть)
-const WX_URL = !TOUR.hotel.ll ? null : "https://api.open-meteo.com/v1/forecast?latitude=" + TOUR.hotel.ll[0] + "&longitude=" + TOUR.hotel.ll[1] +
+const WX_LL = TOUR.hotel.ll || ((TOUR.hotels || []).find(h => h.ll) || {}).ll;
+const WX_URL = !WX_LL ? null : "https://api.open-meteo.com/v1/forecast?latitude=" + WX_LL[0] + "&longitude=" + WX_LL[1] +
   "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunset" +
   "&timezone=" + encodeURIComponent(TOUR.tz) + "&forecast_days=16";
 let WX = store.get("wx", null); // { at: время получения, days: { "2026-12-03": {...} } }
@@ -1196,9 +1212,10 @@ function waHref(p) { return "https://wa.me/" + String(p || "").replace(/\D/g, ""
 
 function renderHelp() {
   const h = TOUR.hotel, g = TOUR.guide;
+  const all = TOUR.hotels || [];
   $("#v-help").innerHTML = `<div class="stack">
-    <article class="card now">
-      <span class="eyebrow">${tx("k322")}</span>
+    ${!h.name ? `<article class="card now"><span class="eyebrow">${tx("k322")}</span><p>${tx("hotelLater")}</p></article>` : `<article class="card now">
+      <span class="eyebrow">${all.length > 1 ? tx("hotelTonight", fmt(h.from), fmt(h.to)) : tx("k322")}</span>
       <h2>${esc(h.name)}</h2>
       <p class="address">${esc(h.address)}</p>
       ${h.tube ? `<span class="roundel"><i aria-hidden="true">${tx("k323", esc(h.tube), esc(h.line), h.walk)}</span>` : ""}
@@ -1212,7 +1229,10 @@ function renderHelp() {
         ${h.ll ? `<a class="maplink" href="${cmLink(h.ll, h.name)}" target="_blank" rel="noopener">${tx("k327")}</a>` : ""}
         ${IS_APPLE ? `<a class="maplink" href="${applePlace(h.name + ", " + h.address)}" target="_blank" rel="noopener">${tx("k317")}</a>` : ""}
       </div>
-    </article>
+    </article>`}
+    ${all.length > 1 ? `<details class="card"><summary><b>${tx("hotelsAll", all.length)}</b></summary>
+      <ul class="items">${all.map(x => `<li${x === h ? ' class="today"' : ""}><span><b>${fmt(x.from)} – ${fmt(x.to)}</b>${x.city ? " · " + esc(x.city) : ""}<br>${esc(x.name)}<br><span class="small muted">${esc(x.address || "")}</span></span></li>`).join("")}</ul>
+    </details>` : ""}
     <article class="card">
       <h3>${tx("k328")}</h3>
       <div>
@@ -1454,7 +1474,7 @@ document.addEventListener("click", e => {
     else locate(a === "demo");
     return;
   }
-  if (e.target.closest("#taxi-open")) { showBig("Please take me to:", TOUR.hotel.name, TOUR.hotel.address, `Near ${TOUR.hotel.tube} station`); return; }
+  if (e.target.closest("#taxi-open")) { showBig("Please take me to:", TOUR.hotel.name, TOUR.hotel.address, TOUR.hotel.tube ? `Near ${TOUR.hotel.tube} station` : ""); return; }
   const say = e.target.closest("[data-say]");
   if (say) { speak(say.dataset.say, Number(say.dataset.rate), say); return; }
   const big = e.target.closest("[data-big-en]");

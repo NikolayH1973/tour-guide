@@ -68,12 +68,12 @@ legend { font-size:.85rem; font-weight:600; padding:0 6px; }
       <label>Имя<input id="f-guide"></label>
       <label>Телефон (с кодом страны)<input id="f-guide-phone" placeholder="+972 50-000-0000"></label>
     </div></fieldset>
-    <fieldset><legend>Отель</legend><div class="grid">
-      <label>Название<input id="f-hotel"></label>
-      <label>Адрес (для таксиста)<input id="f-hotel-addr"></label>
-      <label>Телефон отеля<input id="f-hotel-phone" placeholder="+39 06 000 0000"></label>
-      <label>Координаты из Google Карт<input id="f-hotel-ll" placeholder="41.9028, 12.4964"></label>
-    </div><p class="muted" style="margin-top:0">Координаты: в Google Картах нажмите на отель правой кнопкой — первая строка меню. Без них не будет погоды.</p></fieldset>
+    <fieldset><legend>Отели</legend>
+      <p class="muted" style="margin-top:0">Если отели ещё неизвестны — оставьте пустым: туристы увидят «Отели сообщат ближе к вылету». Добавить их можно потом и выпустить обновление.</p>
+      <div id="hotels"></div>
+      <button type="button" class="ghost" id="add-hotel" style="margin-bottom:12px">+ отель</button>
+      <p class="muted" id="hotels-check"></p>
+    </fieldset>
     <fieldset><legend>Рейсы туда</legend><div id="legs-out"></div>
       <button type="button" class="ghost" data-add-leg="out" style="margin-bottom:12px">+ пересадка</button></fieldset>
     <fieldset><legend>Рейсы обратно</legend><div id="legs-back"></div>
@@ -309,6 +309,57 @@ function fillDestination() {
 $("f-city").addEventListener("input", fillDestination);
 
 /* =========================================================
+   ОТЕЛИ ПО ДАТАМ
+   from — дата заезда, to — дата выезда. Приложение само покажет
+   отель «на сегодня» (адрес для таксиста меняется вместе с городом).
+   ========================================================= */
+const HOTELS = [];
+function renderHotels() {
+  $("hotels").innerHTML = HOTELS.map((h, i) => `
+    <div class="leg" data-hotel="${i}">
+      <div class="leg-h">Отель ${i + 1}<button type="button" class="ghost" data-del-hotel>убрать</button></div>
+      <div class="grid">
+        <label>Город<input data-h="city" value="${esc(h.city)}" placeholder="Хошимин"></label>
+        <label>Заезд<input data-h="from" type="date" value="${esc(h.from)}"></label>
+        <label>Выезд<input data-h="to" type="date" value="${esc(h.to)}"></label>
+        <label>Название<input data-h="name" value="${esc(h.name)}"></label>
+        <label>Адрес (для таксиста)<input data-h="address" value="${esc(h.address)}"></label>
+        <label>Телефон<input data-h="phone" value="${esc(h.phone)}"></label>
+        <label>Координаты из Google Карт<input data-h="ll" value="${esc(h.ll)}" placeholder="10.7769, 106.7009"></label>
+      </div>
+    </div>`).join("");
+  checkHotels();
+}
+// Проверка: отели покрывают все ночи тура, без пропусков и наложений
+function checkHotels() {
+  const start = val("f-start"), list = HOTELS.filter(h => h.name || h.from);
+  if (!list.length || !start || !parsed) { $("hotels-check").textContent = ""; return; }
+  const end = addDays(start, Math.max(...parsed.days.map(d => d.to)) - 1);
+  const notes = [];
+  for (let d = start; d < end; d = addDays(d, 1)) {
+    const n = list.filter(h => h.from && h.to && d >= h.from && d < h.to).length;
+    if (n === 0) notes.push(`ночь на ${fmtDate(d)} — без отеля`);
+    if (n > 1) notes.push(`ночь на ${fmtDate(d)} — два отеля`);
+  }
+  $("hotels-check").textContent = notes.length ? "⚠️ " + notes.slice(0, 4).join("; ") + (notes.length > 4 ? "…" : "") : "✓ Все ночи тура покрыты отелями.";
+}
+$("add-hotel").addEventListener("click", () => {
+  const prev = HOTELS[HOTELS.length - 1], start = val("f-start");
+  HOTELS.push({ city: "", from: prev ? prev.to : start, to: "", name: "", address: "", phone: "", ll: "" });
+  renderHotels();
+});
+document.addEventListener("input", e => {
+  const box = e.target.closest("[data-hotel]"); if (!box) return;
+  HOTELS[+box.dataset.hotel][e.target.dataset.h] = e.target.value;
+  if (e.target.type === "date") checkHotels();
+});
+document.addEventListener("click", e => {
+  const del = e.target.closest("[data-del-hotel]");
+  if (del) { HOTELS.splice(+del.closest("[data-hotel]").dataset.hotel, 1); renderHotels(); }
+});
+$("f-start").addEventListener("change", checkHotels);
+
+/* =========================================================
    РЕЙСЫ С ПЕРЕСАДКАМИ
    Каждое направление — список сегментов. Часовой пояс сегмента нужен,
    чтобы приложение спрашивало статус рейса в правильное время:
@@ -349,7 +400,7 @@ function renderLegs(dir) {
     </div>`).join("");
 }
 document.addEventListener("input", e => {
-  const box = e.target.closest(".leg"); if (!box) return;
+  const box = e.target.closest(".leg[data-dir]"); if (!box) return;   // только сегменты рейсов, не отели
   const l = LEGS[box.dataset.dir][+box.dataset.n], k = e.target.dataset.l;
   l[k] = e.target.type === "checkbox" ? e.target.checked : e.target.value;
   // Город вылета поменялся — подставим его часовой пояс, если знаем
@@ -405,10 +456,16 @@ function buildTrip() {
   T.guide = { name: val("f-guide"), phone: val("f-guide-phone") };
   T.currency = { ...T.currency, symbol: val("f-cur") || T.currency.symbol };
 
-  const ll = val("f-hotel-ll").split(/[,\s]+/).map(Number).filter(n => !isNaN(n));
-  T.hotel = { ...T.hotel, name: val("f-hotel") || T.hotel.name || "", address: val("f-hotel-addr") || T.hotel.address || "", phone: val("f-hotel-phone") || T.hotel.phone || "" };
-  if (ll.length === 2) T.hotel.ll = ll; else if ($("f-newcity").checked) delete T.hotel.ll;
-  if (T.hotel.address) T.hotel.maps = "https://www.google.com/maps/dir/?api=1&destination=" + encodeURIComponent(T.hotel.name + " " + T.hotel.address);
+  // Отели: список по датам. Пустой список — «отели сообщат позже»
+  const hotels = HOTELS.filter(h => h.name.trim()).map(h => {
+    const ll = h.ll.split(/[,\s]+/).map(Number).filter(n => !isNaN(n) && n !== 0);
+    const o = { city: h.city.trim(), from: h.from, to: h.to, name: h.name.trim(), address: h.address.trim(), phone: h.phone.trim() };
+    if (ll.length === 2) o.ll = ll;
+    if (o.address) o.maps = "https://www.google.com/maps/dir/?api=1&destination=" + encodeURIComponent(o.name + " " + o.address);
+    return o;
+  });
+  if (hotels.some(h => !h.from || !h.to)) throw new Error("Отели: у каждого отеля укажите даты заезда и выезда.");
+  if (hotels.length || $("f-newcity").checked) { T.hotels = hotels; delete T.hotel; }
 
   // Рейсы: сегменты + краткая сводка направления (её читает обратный отсчёт и время сбора в аэропорту)
   const home = T.home.tz;
