@@ -399,6 +399,9 @@ function renderToday() {
     html += `<article class="card"><h2>${tx("k108")}</h2><p>${tx("k109", TOUR.city.name)}</p></article>`;
   }
   $("#v-today").innerHTML = html;
+  // Длинный тур: прокручиваем полосу дней так, чтобы текущий день был по центру
+  const cur = $("#v-today .dot-btn[aria-current]");
+  if (cur) { const bar = cur.parentElement; bar.scrollLeft = cur.offsetLeft - bar.offsetLeft - (bar.clientWidth - cur.offsetWidth) / 2; }
 }
 
 function renderProgram() {

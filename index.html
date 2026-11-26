@@ -179,7 +179,12 @@ a.chip { display: inline-flex; align-items: center; gap: 6px; color: var(--ink);
 .day-nav { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; }
 .nav-btn { min-height: 44px; min-width: 44px; padding: 6px 10px; font-size: 1.1rem !important; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font-weight: 600; font-size: .9rem; cursor: pointer; white-space: nowrap; }
 .nav-btn:disabled { opacity: .35; cursor: default; }
-.day-dots { display: flex; justify-content: center; gap: 4px; min-width: 0; }
+/* Номера дней: если не помещаются (тур на 17 дней) — листаются пальцем внутри полосы.
+   auto-отступы у крайних кнопок центрируют короткий ряд, а длинный начинают с края, не обрезая «1». */
+.day-dots { display: flex; gap: 4px; min-width: 0; overflow-x: auto; scrollbar-width: none; padding: 2px 0; scroll-behavior: smooth; }
+.day-dots::-webkit-scrollbar { display: none; }
+.day-dots > :first-child { margin-left: auto; }
+.day-dots > :last-child { margin-right: auto; }
 .dot-btn { width: 30px; height: 30px; flex: none; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--muted); font-size: .8rem; font-weight: 600; cursor: pointer; padding: 0; font-variant-numeric: tabular-nums; }
 .dot-btn[aria-current="true"] { background: var(--gold); border-color: var(--gold); color: #fff; }
 .next-card { text-align: left; font: inherit; color: inherit; cursor: pointer; width: 100%; }

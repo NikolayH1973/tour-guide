@@ -85,7 +85,7 @@ legend { font-size:.85rem; font-weight:600; padding:0 6px; }
     <label>Важно для туристов (виза, документы) — по строке на пункт<textarea id="f-notes" rows="2" placeholder="треб. виза"></textarea></label>
     <label>Сколько лететь — для фразы «… в самолёте — время подготовиться»<input id="f-duration" placeholder="Пять часов"></label>
     <fieldset><legend>Направление</legend>
-      <label style="display:flex;gap:8px;align-items:center;color:var(--ink)"><input id="f-newcity" type="checkbox" style="width:auto;margin:0"> Это не Лондон — убрать лондонские места, метро, викторину, разговорник, телефоны и памятку</label>
+      <input id="f-newcity" type="checkbox" hidden>   <!-- ставится сама: направление не совпадает с городом шаблона -->
       <label>Куда едет группа — страна или город<input id="f-city" placeholder="Вьетнам"></label>
       <p class="muted" id="dest-sum" style="margin-top:-4px"></p>
       <details><summary class="muted" style="cursor:pointer;margin-bottom:8px">Проверить, как название встанет во фразы</summary>
@@ -287,7 +287,14 @@ $("parse").addEventListener("click", () => {
   $("checks-card").hidden = false;
   $("f-included").value = parsed.sec.included.join("\n");
   $("f-notincluded").value = parsed.sec.notIncluded.join("\n");
-  if (!$("f-title").value && parsed.preface[0]) $("f-title").value = parsed.preface[0];
+  // Заголовок страницы Штурмана «Организованные туры Офир турс Вьетнам»: агентство — отдельно, название — коротко
+  const head = parsed.preface[0] || "";
+  const hm = head.match(/^(?:Организованн\S*|Семейн\S*)\s+тур\S*\s+(?:от\s+)?(.+)$/i);
+  if (hm && dep.title && hm[1].endsWith(dep.title)) {
+    if (!$("f-agency").value) $("f-agency").value = hm[1].slice(0, -dep.title.length).trim();
+    if (!$("f-title").value) $("f-title").value = dep.title;
+  }
+  if (!$("f-title").value) $("f-title").value = dep.title || head;
   renderDays();
   $("checks-card").scrollIntoView({ behavior: "smooth" });
 });
@@ -425,6 +432,8 @@ const touched = new Set();    // поля, которые человек поп�
 AUTO_IDS.forEach(id => $(id).addEventListener("input", () => touched.add(id)));
 function fillDestination() {
   const name = val("f-city");
+  // Другое направление — значит, лондонское содержимое (места, метро, викторина, памятка) этому туру не подходит
+  $("f-newcity").checked = !!name && BASE && normCity(name) !== normCity(BASE.city.name);
   if (!name) { $("dest-sum").textContent = ""; return; }
   const known = DEST[name.toLowerCase()];
   // Нет в справочнике: падежи — по правилам, пояс — из таблицы городов (если город там есть),
