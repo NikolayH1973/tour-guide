@@ -135,7 +135,8 @@ function optionsHtml() {
 /* ===== Погода (Open-Meteo, бесплатно, без ключа) =====
    Один запрос на 16 дней для района отеля. Ответ сохраняем в телефоне:
    без интернета показываем последний прогноз с пометкой, когда он получен. */
-const WX_URL = "https://api.open-meteo.com/v1/forecast?latitude=" + TOUR.hotel.ll[0] + "&longitude=" + TOUR.hotel.ll[1] +
+// Без координат отеля прогноз не запрашиваем (у нового тура их может ещё не быть)
+const WX_URL = !TOUR.hotel.ll ? null : "https://api.open-meteo.com/v1/forecast?latitude=" + TOUR.hotel.ll[0] + "&longitude=" + TOUR.hotel.ll[1] +
   "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunset" +
   "&timezone=" + encodeURIComponent(TOUR.tz) + "&forecast_days=16";
 let WX = store.get("wx", null); // { at: время получения, days: { "2026-12-03": {...} } }
@@ -170,6 +171,7 @@ function wxLine(date, compact) {
 }
 
 async function loadWeather() {
+  if (!WX_URL) return;
   if (!navigator.onLine) return;                          // нет сети — живём с сохранённым
   if (WX && Date.now() - WX.at < 3 * 3600000) return;     // свежее 3 часов — не дёргаем сервер
   const ctrl = new AbortController();
@@ -358,7 +360,7 @@ function renderToday() {
 function renderProgram() {
   const today = preview || tripToday();
   $("#v-program").innerHTML = `<div class="stack">
-    <a class="pill opt" href="#program/options" data-go="program/options">${tx("k117", TOUR.options.length, plural(TOUR.options.length, tx("k110"), tx("k111"), tx("k112")))}</a>
+    ${TOUR.options.length ? `<a class="pill opt" href="#program/options" data-go="program/options">${tx("k117", TOUR.options.length, plural(TOUR.options.length, tx("k110"), tx("k111"), tx("k112")))}</a>` : ""}
     <p class="small muted">${tx("k118")}</p>
     ${TOUR.days.map((d, i) => `
       <article class="card day ${d.date === today ? "today" : ""}">
@@ -645,17 +647,18 @@ function shelves() {
 
 /* Под-экран 1: главный */
 function placesHome() {
+  if (!TOUR.places.length) return `<div class="stack"><article class="card"><p>${tx("noPlaces")}</p></article></div>`;
   const chip = k => `<a class="chip" href="#places/cat/${k}" data-go="places/cat/${k}">${CAT_ICON[k]} ${esc(CATS[k])}</a>`;
   return `<div class="stack">
     <div class="tools2">
       <a class="tool" href="#places/near" data-go="places/near">${SVG_NEAR}<span>${tx("k183")}<small>${tx("k184")}</small></span></a>
-      <a class="tool" href="#places/metro" data-go="places/metro">${SVG_TUBE}<span>${tx("k185")}<small>${tx("k186")}</small></span></a>
+      ${TOUR.lines.length ? `<a class="tool" href="#places/metro" data-go="places/metro">${SVG_TUBE}<span>${tx("k185")}<small>${tx("k186")}</small></span></a>` : ""}
     </div>
     ${shelves().map(s => `<section aria-label="${esc(s.title)}">
       <div class="shelf-h"><div><h2>${esc(s.title)}</h2><p class="small muted">${esc(s.sub)}</p></div>
         <a href="#places/shelf/${s.id}" data-go="places/shelf/${s.id}">${tx("k179", s.list.length)}</a></div>
       <div class="rail"${s.id === "prog" ? ' data-rail="prog"' : ""}>${(s.id === "prog" ? s.list : s.list.slice(0, 8)).map(p => placeTile(p, s.id)).join("")}</div>
-    </section>${s.id === "prog" ? walkShelf() : ""}`).join("")}
+    </section>${s.id === "prog" && TOUR.walks.length ? walkShelf() : ""}`).join("")}
     <section aria-label="${tx("k180")}">
       <div class="shelf-h"><h2>${tx("k180")}</h2></div>
       <div class="chips" style="margin-top:8px">${MAIN_CATS.map(chip).join("")}
@@ -1184,8 +1187,8 @@ function installHtml() {
     ${installOS === "iphone" ? iphone : android}`;
 }
 
-function telHref(p) { return "tel:" + p.replace(/[^\d+]/g, ""); }
-function waHref(p) { return "https://wa.me/" + p.replace(/\D/g, ""); }
+function telHref(p) { return "tel:" + String(p || "").replace(/[^\d+]/g, ""); }
+function waHref(p) { return "https://wa.me/" + String(p || "").replace(/\D/g, ""); }
 
 function renderHelp() {
   const h = TOUR.hotel, g = TOUR.guide;
@@ -1194,15 +1197,15 @@ function renderHelp() {
       <span class="eyebrow">${tx("k322")}</span>
       <h2>${esc(h.name)}</h2>
       <p class="address">${esc(h.address)}</p>
-      <span class="roundel"><i aria-hidden="true">${tx("k323", esc(h.tube), esc(h.line), h.walk)}</span>
-      <p class="small muted">${esc(h.note)}</p>
+      ${h.tube ? `<span class="roundel"><i aria-hidden="true">${tx("k323", esc(h.tube), esc(h.line), h.walk)}</span>` : ""}
+      ${h.note ? `<p class="small muted">${esc(h.note)}</p>` : ""}
       <div class="btn-row">
         <button type="button" class="btn" id="taxi-open">${tx("k324")}</button>
-        <a class="btn ghost" href="${h.maps}" target="_blank" rel="noopener">${tx("k325")}</a>
+        ${h.maps ? `<a class="btn ghost" href="${h.maps}" target="_blank" rel="noopener">${tx("k325")}</a>` : ""}
       </div>
       <p class="hint">${tx("k326")}</p>
       <div class="alt-links">
-        <a class="maplink" href="${cmLink(h.ll, h.name)}" target="_blank" rel="noopener">${tx("k327")}</a>
+        ${h.ll ? `<a class="maplink" href="${cmLink(h.ll, h.name)}" target="_blank" rel="noopener">${tx("k327")}</a>` : ""}
         ${IS_APPLE ? `<a class="maplink" href="${applePlace(h.name + ", " + h.address)}" target="_blank" rel="noopener">${tx("k317")}</a>` : ""}
       </div>
     </article>
@@ -1213,10 +1216,10 @@ function renderHelp() {
           <div><div>${tx("k329", esc(g.name))}</div><div class="num">${g.phone ? esc(g.phone) : tx("k318")}</div></div>
           ${g.phone ? `<a class="call wa" href="${waHref(g.phone)}" target="_blank" rel="noopener" aria-label="${tx("k319")}">WA</a>` : `<span class="call off" style="min-width:52px;min-height:52px;display:grid;place-items:center;border-radius:50%">…</span>`}
         </div>
-        <div class="contact">
+        ${h.phone ? `<div class="contact">
           <div><div>${tx("k330")}</div><div class="num">${esc(h.phone)}</div></div>
           <a class="call" href="${telHref(h.phone)}" aria-label="${tx("k320")}">☎</a>
-        </div>
+        </div>` : ""}
         ${TOUR.contacts.map(c => `
         <div class="contact">
           <div><div>${esc(c.label)}</div><div class="num">${esc(c.phone)}${c.note ? " · " + esc(c.note) : ""}</div></div>
@@ -1235,7 +1238,7 @@ function renderHelp() {
       <a class="btn ghost" href="#phrases" data-theme-link="street">${tx("k334")}</a>
       <a class="btn ghost" href="#phrases" data-theme-link="health">${tx("k335")}</a>
     </article>
-    <article class="card">
+    ${TOUR.help.theft.length ? `<article class="card">
       <h3>${tx("k336")}</h3>
       <ul class="items">
         ${TOUR.help.theft.map(t => `<li><span>${t}</span></li>`).join("")}
@@ -1245,10 +1248,12 @@ function renderHelp() {
       
       
       <a class="btn ghost" href="#phrases" data-theme-link="theft">${tx("k338")}</a>
-    </article>
+    </article>` : ""}
   </div>`;
 }
 
+// Сколько фраз в разговорнике (0 — разделы разговорника не показываем)
+const PHRASES_N = TOUR.phrases.reduce((n, t) => n + t.items.length, 0);
 function renderTools() {
   const c = TOUR.currency;
   const rate = store.get("rate", c.rate);
@@ -1279,17 +1284,17 @@ function renderTools() {
         <li><span>${tx("k357")}</span></li>
       </ul>
     </details>
-    <article class="card">
+    ${QUIZ.length || PHRASES_N ? `<article class="card">
       <h3>${tx("k358")}</h3>
       <p class="small muted" style="margin:0">${tx("k359", TOUR.flights.durationText, TOUR.city.dat)}</p>
       ${toolsPlay()}
-    </article>
-    <a class="card" href="#phrases" style="text-decoration:none;color:inherit">
+    </article>` : ""}
+    ${PHRASES_N ? `<a class="card" href="#phrases" style="text-decoration:none;color:inherit">
       <h3>${tx("k360")}</h3>
       <p class="small muted">${tx("k361", TOUR.lang.accent)}</p>
       <span class="btn">${tx("k362")}</span>
-    </a>
-    <article class="card">
+    </a>` : ""}
+    ${TOUR.apps.length ? `<article class="card">
       <h3>${tx("k363")}</h3>
       <p class="hint">${tx("k364")}</p>
       ${TOUR.apps.map(a => `<div class="app-row">
@@ -1297,7 +1302,7 @@ function renderTools() {
         <a class="btn ghost" href="${IS_APPLE ? a.ios : a.web}" target="_blank" rel="noopener">${IS_APPLE ? " App Store" : tx("k343")}</a>
       </div>`).join("")}
       ${IS_APPLE ? "" : `<p class="hint">${tx("k344")}</p>`}
-    </article>
+    </article>` : ""}
     <article class="card">
       <h3>${tx("k365")}</h3>
       <p class="hint">${tx("k366")}</p>
@@ -1325,8 +1330,8 @@ function toolsPlay() {
   const best = store.get("quizBest", null), run = store.get("quizRun", null);
   const known = store.get("cardsKnown", []).length, total = TOUR.phrases.reduce((n, t) => n + t.items.length, 0);
   const quizSub = run && run.i < run.qs.length ? `${tx("k373", run.i + 1, run.qs.length)}` : `${QUIZ.length} ${plural(QUIZ.length, tx("k251"), tx("k252"), tx("k253"))}${best != null ? ` ${tx("k374", best, QUIZ_N)}` : ""}`;
-  return `<a class="it-row play-row" href="#quiz"><span>${tx("k378", TOUR.quiz.title)}<span class="small muted">${quizSub}</span></span><span class="chev" aria-hidden="true">›</span></a>
-    <a class="it-row play-row" href="#cards"><span>${tx("k379")}<span class="small muted">${tx("k380", total, plural(total, tx("k375"), tx("k376"), tx("k377")), Math.min(known, total))}</span></span><span class="chev" aria-hidden="true">›</span></a>`;
+  return `${QUIZ.length ? `<a class="it-row play-row" href="#quiz"><span>${tx("k378", TOUR.quiz.title)}<span class="small muted">${quizSub}</span></span><span class="chev" aria-hidden="true">›</span></a>` : ""}
+    ${total ? `<a class="it-row play-row" href="#cards"><span>${tx("k379")}<span class="small muted">${tx("k380", total, plural(total, tx("k375"), tx("k376"), tx("k377")), Math.min(known, total))}</span></span><span class="chev" aria-hidden="true">›</span></a>` : ""}`;
 }
 
 function wireConverter() {
