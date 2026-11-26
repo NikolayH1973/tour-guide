@@ -79,16 +79,19 @@ legend { font-size:.85rem; font-weight:600; padding:0 6px; }
     <fieldset><legend>Рейсы обратно</legend><div id="legs-back"></div>
       <button type="button" class="ghost" data-add-leg="back" style="margin-bottom:12px">+ пересадка</button></fieldset>
     <label>Сколько лететь — для фразы «… в самолёте — время подготовиться»<input id="f-duration" placeholder="Пять часов"></label>
-    <fieldset><legend>Город</legend>
+    <fieldset><legend>Направление</legend>
       <label style="display:flex;gap:8px;align-items:center;color:var(--ink)"><input id="f-newcity" type="checkbox" style="width:auto;margin:0"> Это не Лондон — убрать лондонские места, метро, викторину, разговорник, телефоны и памятку</label>
+      <label>Куда едет группа — страна или город<input id="f-city" placeholder="Вьетнам"></label>
+      <p class="muted" id="dest-sum" style="margin-top:-4px"></p>
+      <details><summary class="muted" style="cursor:pointer;margin-bottom:8px">Проверить, как название встанет во фразы</summary>
       <div class="grid">
-        <label>Город<input id="f-city" placeholder="Рим"></label>
-        <label>«в …» (где?)<input id="f-city-prep" placeholder="Риме"></label>
-        <label>«от …» (кого? чего?)<input id="f-city-gen" placeholder="Рима"></label>
-        <label>«к …» (кому? чему?)<input id="f-city-dat" placeholder="Риму"></label>
-        <label>Часовой пояс<input id="f-tz" placeholder="Europe/Rome"></label>
-        <label>Валюта (знак)<input id="f-cur" placeholder="€"></label>
-      </div>
+        <label>Погода … в день прилёта<input id="f-city-prep" data-auto placeholder="во Вьетнаме"></label>
+        <label>Вы далеко от …<input id="f-city-gen" data-auto placeholder="Вьетнама"></label>
+        <label>Время подготовиться к …<input id="f-city-dat" data-auto placeholder="Вьетнаму"></label>
+        <label>Часовой пояс<input id="f-tz" data-auto placeholder="Asia/Ho_Chi_Minh"></label>
+        <label>Валюта (знак)<input id="f-cur" data-auto placeholder="₫"></label>
+        <label>Флаг<input id="f-flag" data-auto placeholder="🇻🇳"></label>
+      </div></details>
     </fieldset>
   </section>
 
@@ -224,6 +227,88 @@ $("parse").addEventListener("click", () => {
 });
 
 /* =========================================================
+   НАПРАВЛЕНИЕ: падежи, часовой пояс, валюта
+   Человек пишет только «Вьетнам». Формы для фраз приложения
+   («во Вьетнаме», «от Вьетнама», «к Вьетнаму») подставляем сами:
+   сначала из справочника, иначе — по правилам склонения.
+   ========================================================= */
+//            где? (с предлогом)  от кого/чего?  к кому/чему?   пояс                 валюта флаг
+const DEST = {
+  "вьетнам":   ["во Вьетнаме", "Вьетнама", "Вьетнаму", "Asia/Ho_Chi_Minh", "₫", "🇻🇳"],
+  "италия":    ["в Италии", "Италии", "Италии", "Europe/Rome", "€", "🇮🇹"],
+  "рим":       ["в Риме", "Рима", "Риму", "Europe/Rome", "€", "🇮🇹"],
+  "франция":   ["во Франции", "Франции", "Франции", "Europe/Paris", "€", "🇫🇷"],
+  "париж":     ["в Париже", "Парижа", "Парижу", "Europe/Paris", "€", "🇫🇷"],
+  "испания":   ["в Испании", "Испании", "Испании", "Europe/Madrid", "€", "🇪🇸"],
+  "португалия":["в Португалии", "Португалии", "Португалии", "Europe/Lisbon", "€", "🇵🇹"],
+  "германия":  ["в Германии", "Германии", "Германии", "Europe/Berlin", "€", "🇩🇪"],
+  "австрия":   ["в Австрии", "Австрии", "Австрии", "Europe/Vienna", "€", "🇦🇹"],
+  "швейцария": ["в Швейцарии", "Швейцарии", "Швейцарии", "Europe/Zurich", "CHF", "🇨🇭"],
+  "нидерланды":["в Нидерландах", "Нидерландов", "Нидерландам", "Europe/Amsterdam", "€", "🇳🇱"],
+  "голландия": ["в Голландии", "Голландии", "Голландии", "Europe/Amsterdam", "€", "🇳🇱"],
+  "бельгия":   ["в Бельгии", "Бельгии", "Бельгии", "Europe/Brussels", "€", "🇧🇪"],
+  "чехия":     ["в Чехии", "Чехии", "Чехии", "Europe/Prague", "Kč", "🇨🇿"],
+  "прага":     ["в Праге", "Праги", "Праге", "Europe/Prague", "Kč", "🇨🇿"],
+  "венгрия":   ["в Венгрии", "Венгрии", "Венгрии", "Europe/Budapest", "Ft", "🇭🇺"],
+  "будапешт":  ["в Будапеште", "Будапешта", "Будапешту", "Europe/Budapest", "Ft", "🇭🇺"],
+  "греция":    ["в Греции", "Греции", "Греции", "Europe/Athens", "€", "🇬🇷"],
+  "черногория":["в Черногории", "Черногории", "Черногории", "Europe/Podgorica", "€", "🇲🇪"],
+  "хорватия":  ["в Хорватии", "Хорватии", "Хорватии", "Europe/Zagreb", "€", "🇭🇷"],
+  "албания":   ["в Албании", "Албании", "Албании", "Europe/Tirane", "L", "🇦🇱"],
+  "норвегия":  ["в Норвегии", "Норвегии", "Норвегии", "Europe/Oslo", "kr", "🇳🇴"],
+  "финляндия": ["в Финляндии", "Финляндии", "Финляндии", "Europe/Helsinki", "€", "🇫🇮"],
+  "лапландия": ["в Лапландии", "Лапландии", "Лапландии", "Europe/Helsinki", "€", "🇫🇮"],
+  "исландия":  ["в Исландии", "Исландии", "Исландии", "Atlantic/Reykjavik", "kr", "🇮🇸"],
+  "великобритания": ["в Великобритании", "Великобритании", "Великобритании", "Europe/London", "£", "🇬🇧"],
+  "англия":    ["в Англии", "Англии", "Англии", "Europe/London", "£", "🇬🇧"],
+  "шотландия": ["в Шотландии", "Шотландии", "Шотландии", "Europe/London", "£", "🇬🇧"],
+  "лондон":    ["в Лондоне", "Лондона", "Лондону", "Europe/London", "£", "🇬🇧"],
+  "япония":    ["в Японии", "Японии", "Японии", "Asia/Tokyo", "¥", "🇯🇵"],
+  "корея":     ["в Корее", "Кореи", "Корее", "Asia/Seoul", "₩", "🇰🇷"],
+  "южная корея": ["в Южной Корее", "Южной Кореи", "Южной Корее", "Asia/Seoul", "₩", "🇰🇷"],
+  "китай":     ["в Китае", "Китая", "Китаю", "Asia/Shanghai", "¥", "🇨🇳"],
+  "таиланд":   ["в Таиланде", "Таиланда", "Таиланду", "Asia/Bangkok", "฿", "🇹🇭"],
+  "индия":     ["в Индии", "Индии", "Индии", "Asia/Kolkata", "₹", "🇮🇳"],
+  "шри-ланка": ["на Шри-Ланке", "Шри-Ланки", "Шри-Ланке", "Asia/Colombo", "Rs", "🇱🇰"],
+  "грузия":    ["в Грузии", "Грузии", "Грузии", "Asia/Tbilisi", "₾", "🇬🇪"],
+  "армения":   ["в Армении", "Армении", "Армении", "Asia/Yerevan", "֏", "🇦🇲"],
+  "узбекистан":["в Узбекистане", "Узбекистана", "Узбекистану", "Asia/Tashkent", "сум", "🇺🇿"],
+  "марокко":   ["в Марокко", "Марокко", "Марокко", "Africa/Casablanca", "DH", "🇲🇦"],
+  "мексика":   ["в Мексике", "Мексики", "Мексике", "America/Mexico_City", "$", "🇲🇽"],
+  "кипр":      ["на Кипре", "Кипра", "Кипру", "Asia/Nicosia", "€", "🇨🇾"],
+  "мальта":    ["на Мальте", "Мальты", "Мальте", "Europe/Malta", "€", "🇲🇹"],
+  "сицилия":   ["на Сицилии", "Сицилии", "Сицилии", "Europe/Rome", "€", "🇮🇹"]
+};
+// Правила для названий не из справочника. Не идеально, поэтому формы показываем и даём поправить.
+function declineRu(name) {
+  const w = name.trim(), low = w.toLowerCase(), cut = n => w.slice(0, -n);
+  const v = (low[0] === "в" || low[0] === "ф") && !"аеёиоуыэюя".includes(low[1]) ? "во " : "в ";   // во Вьетнаме, во Франции
+  if (/[оиуэею]$/.test(low) && !/ия$/.test(low)) return [v + w, w, w];       // Марокко, Сочи — не склоняются
+  if (/ия$/.test(low)) return [v + cut(1) + "и", cut(1) + "и", cut(1) + "и"];  // Индия → в Индии
+  if (/[гкхжшчщ]а$/.test(low)) return [v + cut(1) + "е", cut(1) + "и", cut(1) + "е"];  // Прага → Праги
+  if (/[ая]$/.test(low)) return [v + cut(1) + "е", cut(1) + (low.endsWith("я") ? "и" : "ы"), cut(1) + "е"];
+  if (/й$/.test(low)) return [v + cut(1) + "е", cut(1) + "я", cut(1) + "ю"];   // Ханой → в Ханое
+  if (/ь$/.test(low)) return [v + cut(1) + "и", cut(1) + "и", cut(1) + "и"];
+  return [v + w + "е", w + "а", w + "у"];                                       // Хошимин → в Хошимине
+}
+const AUTO_IDS = ["f-city-prep", "f-city-gen", "f-city-dat", "f-tz", "f-cur", "f-flag"];
+const touched = new Set();    // поля, которые человек поправил руками — их больше не перезаписываем
+AUTO_IDS.forEach(id => $(id).addEventListener("input", () => touched.add(id)));
+function fillDestination() {
+  const name = val("f-city");
+  if (!name) { $("dest-sum").textContent = ""; return; }
+  const known = DEST[name.toLowerCase()];
+  // Нет в справочнике: падежи — по правилам, пояс — из таблицы городов (если город там есть),
+  // валюту и флаг оставляем пустыми, чтобы не остались от прошлого направления
+  const forms = known || [...declineRu(name), guessTz(name), "", ""];
+  AUTO_IDS.forEach((id, i) => { if (!touched.has(id)) $(id).value = forms[i] || ""; });
+  $("dest-sum").textContent = `Во фразах приложения: «Погода ${val("f-city-prep")}», «далеко от ${val("f-city-gen")}», «подготовиться к ${val("f-city-dat")}».`
+    + (known ? "" : " Названия нет в справочнике — проверьте формы, часовой пояс и валюту ниже.");
+  if (!known) document.querySelector("#trip-card details").open = true;   // раскрываем, чтобы проверили
+}
+$("f-city").addEventListener("input", fillDestination);
+
+/* =========================================================
    РЕЙСЫ С ПЕРЕСАДКАМИ
    Каждое направление — список сегментов. Часовой пояс сегмента нужен,
    чтобы приложение спрашивало статус рейса в правильное время:
@@ -300,6 +385,7 @@ function buildTrip() {
   const total = Math.max(...parsed.days.map(d => d.to));
   const end = addDays(start, total - 1);
   const city = val("f-city") || T.city.name;
+  if ($("f-newcity").checked && !val("f-tz")) throw new Error("Направление: укажите часовой пояс (например, для Флоренции — Europe/Rome). Без него приложение перепутает «сегодняшний» день.");
   const tz = val("f-tz") || T.tz;
 
   if ($("f-newcity").checked) {
@@ -310,7 +396,7 @@ function buildTrip() {
     T.help = { backToHotel: "Если связи нет — возвращайтесь в отель: нажмите «Показать таксисту».", theft: [], links: [] };
     T.shelves = { season: null, eveningCats: [], eveningSub: "" };
     T.transport = { colors: {}, defaultLine: null, altHome: null };
-    T.city = { name: city, gen: val("f-city-gen") || city, dat: val("f-city-dat") || city, prep: val("f-city-prep") || city, flag: "", mapSuffix: city };
+    T.city = { name: city, gen: val("f-city-gen") || city, dat: val("f-city-dat") || city, prep: val("f-city-prep") || "в " + city, flag: val("f-flag"), mapSuffix: city };
     T.hotel = {};
   }
   T.title = val("f-title") || T.title;
@@ -385,7 +471,6 @@ $("download").addEventListener("click", () => withTrip(T => {
 // Основа — текущий trip.json; подсказки в полях города — из него же
 fetch("trip.json").then(r => r.json()).then(T => {
   BASE = T;
-  $("f-city").placeholder = T.city.name; $("f-tz").placeholder = T.tz; $("f-cur").placeholder = T.currency.symbol;
 }).catch(() => alertBox("Не удалось загрузить trip.json — откройте конструктор с того же сайта, что и приложение."));
 </script>
 </body>

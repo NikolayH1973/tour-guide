@@ -18,6 +18,8 @@ const parse = iso => { const [y,m,d] = iso.split("-").map(Number); return new Da
 const fmt = iso => { const d = parse(iso); return `${d.getDate()} ${MONTHS[d.getMonth()]}`; };
 const wday = iso => WDAYS[parse(iso).getDay()];
 // "Сегодня" по местному времени тура: телефон может ещё жить по домашнему
+// Первая буква — заглавная: «в Лондоне» в начале предложения становится «В Лондоне»
+const cap = s => s ? s[0].toUpperCase() + s.slice(1) : s;
 function tripToday() {
   try { return new Intl.DateTimeFormat("en-CA", { timeZone: TOUR.tz }).format(new Date()); }
   catch { const d = new Date(); return d.toISOString().slice(0,10); }
@@ -371,7 +373,7 @@ function renderProgram() {
         ${wxLine(d.date, true)}
         ${dayItems(d)}
         ${i === 0 ? `<p class="small muted">${tx("k113", TOUR.home.prep, airportTime(), esc(TOUR.airport.name), TOUR.airport.short ? ", " + esc(TOUR.airport.short) : "")}</p>` : ""}
-        <p class="small muted">${i === 0 ? tx("k114", TOUR.city.prep) : tx("k84")}: ${d.meeting.time ? esc(d.meeting.time) + " · " : ""}${d.meeting.wa ? esc(waText(d.meeting).replace(tx("k86"), tx("k87"))) : esc(d.meeting.place)}</p>
+        <p class="small muted">${i === 0 ? tx("k114", cap(TOUR.city.prep)) : tx("k84")}: ${d.meeting.time ? esc(d.meeting.time) + " · " : ""}${d.meeting.wa ? esc(waText(d.meeting).replace(tx("k86"), tx("k87"))) : esc(d.meeting.place)}</p>
         <button type="button" class="btn ghost" data-pv-go="${d.date}">${tx("k116")}</button>
       </article>`).join("")}
     ${optionsHtml()}
@@ -512,7 +514,7 @@ function nearPanel() {
       <button type="button" class="btn ghost" data-near="go">${tx("k144")}</button></div>`;
   if (nearState === "far") {
     const km = Math.round(haversine([near.lat, near.lng], TOUR.hotel.ll) / 1000).toLocaleString("ru-RU");
-    return `<div class="near-panel">${tx("k146", TOUR.city.gen, km, TOUR.city.prep)}
+    return `<div class="near-panel">${tx("k146", TOUR.city.gen, km, cap(TOUR.city.prep))}
       <button type="button" class="btn ghost" data-near="demo">${tx("k147")}</button></div>`;
   }
   if (near) return `<div class="near-panel ok">
