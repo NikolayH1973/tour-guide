@@ -1697,15 +1697,20 @@ function renderClocks() {
   try {
     const now = new Date();
     const L = partsIn(ZONES.trip, now), H = partsIn(ZONES.home, now);
-    // Разница в часах между поясами (в декабре Израиль впереди на 2 часа)
-    let diff = ((H.h * 60 + H.m) - (L.h * 60 + L.m)) / 60;
+    // Разница в часах: плюс — место поездки впереди дома (Вьетнам +5), минус — позади (Лондон −2)
+    let diff = ((L.h * 60 + L.m) - (H.h * 60 + H.m)) / 60;
     if (diff > 12) diff -= 24;
     if (diff < -12) diff += 24;
     const night = H.h >= 23 || H.h < 7; // дома ночь — лучше не звонить
+    // Дата с днём недели под каждым временем: сразу видно, что «там уже 27-е, а у нас 26-е»
+    const dateIn = tz => new Intl.DateTimeFormat("ru-RU", { timeZone: tz, weekday: "short", day: "numeric", month: "long" }).format(now);
+    const hrs = Math.abs(diff).toLocaleString("ru-RU");                 // 5, 2 или 3,5 (Индия)
+    const rel = diff > 0 ? tx("clockAhead", hrs, TOUR.home.gen) : diff < 0 ? tx("clockBehind", hrs, TOUR.home.gen) : tx("clockSame", TOUR.home.prep);
     $("#clocks").innerHTML = `
-      <div class="clock"><span class="lbl">${TOUR.city.flag} ${TOUR.city.name}</span><span class="t">${hhmm(L)}</span><span class="note">${tx("k389")}</span></div>
-      <div class="clock"><span class="lbl">${TOUR.home.flag} ${TOUR.home.name}</span><span class="t">${hhmm(H)}</span>
-        <span class="note ${night ? "night" : ""}">${night ? tx("k387") : (diff > 0 ? "+" : "") + diff + tx("k388") + TOUR.city.gen}</span></div>`;
+      <div class="clock"><span class="lbl">${TOUR.city.flag} ${esc(TOUR.city.name)}</span><span class="t">${hhmm(L)}</span>
+        <span class="date">${dateIn(ZONES.trip)}</span><span class="note">${rel}</span></div>
+      <div class="clock"><span class="lbl">${TOUR.home.flag} ${esc(TOUR.home.name)}</span><span class="t">${hhmm(H)}</span>
+        <span class="date">${dateIn(ZONES.home)}</span>${night ? `<span class="note night">${tx("k387")}</span>` : ""}</div>`;
   } catch { $("#clocks").hidden = true; }
 }
 renderClocks();
