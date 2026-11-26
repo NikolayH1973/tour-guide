@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Конструктор тура</title>
+<style>
+/* Внутренний инструмент: простой и понятный, без украшений */
+:root { --ink:#142033; --muted:#5b6575; --line:#d6dbe3; --bg:#eef1f5; --card:#fff; --accent:#003688; --warn:#9a5b00; --warn-bg:#fff4e0; --err:#b3261e; --err-bg:#fdecea; --ok:#17693a; --opt:#6b3fb5; }
+* { box-sizing: border-box; }
+body { margin:0; font:16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; color:var(--ink); background:var(--bg); }
+main { max-width: 900px; margin: 0 auto; padding: 24px 16px 80px; }
+h1 { font-size: 1.6rem; margin: 0 0 4px; }
+h2 { font-size: 1.15rem; margin: 0 0 12px; }
+.card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin-top:16px; }
+.muted { color:var(--muted); font-size:.9rem; }
+label { display:block; font-size:.85rem; color:var(--muted); margin-bottom:10px; }
+input, textarea, select { display:block; width:100%; margin-top:4px; font:inherit; color:inherit; padding:8px 10px; border:1px solid var(--line); border-radius:8px; background:#fff; }
+textarea { resize: vertical; }
+#src { min-height: 220px; font-size: .95rem; }
+.grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0 16px; }
+button { font:inherit; font-weight:600; padding:10px 18px; border-radius:10px; border:1px solid var(--accent); background:var(--accent); color:#fff; cursor:pointer; min-height:44px; }
+button.ghost { background:transparent; color:var(--accent); }
+.row { display:flex; gap:12px; flex-wrap:wrap; margin-top:12px; }
+.check { padding:8px 12px; border-radius:8px; margin-top:8px; }
+.check.err { background:var(--err-bg); color:var(--err); }
+.check.warn { background:var(--warn-bg); color:var(--warn); }
+.check.ok { background:#e8f3ec; color:var(--ok); }
+.day { border-top:1px solid var(--line); padding-top:12px; margin-top:12px; }
+.day-h { display:flex; gap:12px; align-items:baseline; font-weight:600; }
+.day textarea { min-height: 110px; }
+.legend { font-size:.85rem; }
+.opt { color: var(--opt); font-weight: 600; }
+fieldset { border:1px dashed var(--line); border-radius:10px; padding:10px 12px 0; margin:0 0 12px; }
+legend { font-size:.85rem; font-weight:600; padding:0 6px; }
+.sticky { position: sticky; bottom: 0; background: var(--bg); padding: 12px 0; border-top: 1px solid var(--line); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Конструктор тура</h1>
+  <p class="muted">Вставьте текст программы → проверьте дни → заполните данные поездки → «Предпросмотр» или «Скачать trip.json». Ничего никуда не отправляется: всё работает прямо в этом браузере.</p>
+
+  <section class="card">
+    <h2>1. Текст программы</h2>
+    <p class="muted">Подойдёт текст со Штурмана, из Word или WhatsApp. Дни должны начинаться словами «ДЕНЬ 1.» или «ДНИ 2–3.»</p>
+    <textarea id="src" placeholder="ДЕНЬ 1. Тель-Авив – Рим&#10;Вылет в Рим. Обзорная экскурсия. Размещение, 3 ночи в Риме.&#10;ДЕНЬ 2. Ватикан&#10;Музеи Ватикана (за дополнительную плату)…"></textarea>
+    <div class="row"><button id="parse">Разобрать по дням</button></div>
+  </section>
+
+  <section class="card" id="checks-card" hidden>
+    <h2>2. Проверка</h2>
+    <div id="checks"></div>
+  </section>
+
+  <section class="card" id="trip-card" hidden>
+    <h2>3. Данные поездки</h2>
+    <div class="grid">
+      <label>Название тура<input id="f-title" placeholder="Рим и Ватикан"></label>
+      <label>Дата начала<input id="f-start" type="date"></label>
+      <label>Агентство<input id="f-agency" placeholder="Метрополь-Каспи"></label>
+    </div>
+    <fieldset><legend>Гид</legend><div class="grid">
+      <label>Имя<input id="f-guide"></label>
+      <label>Телефон (с кодом страны)<input id="f-guide-phone" placeholder="+972 50-000-0000"></label>
+    </div></fieldset>
+    <fieldset><legend>Отель</legend><div class="grid">
+      <label>Название<input id="f-hotel"></label>
+      <label>Адрес (для таксиста)<input id="f-hotel-addr"></label>
+      <label>Телефон отеля<input id="f-hotel-phone" placeholder="+39 06 000 0000"></label>
+      <label>Координаты из Google Карт<input id="f-hotel-ll" placeholder="41.9028, 12.4964"></label>
+    </div><p class="muted" style="margin-top:0">Координаты: в Google Картах нажмите на отель правой кнопкой — первая строка меню. Без них не будет погоды.</p></fieldset>
+    <fieldset><legend>Рейс туда</legend><div class="grid">
+      <label>Номер<input id="f-out-no" placeholder="LY381"></label>
+      <label>Откуда<input id="f-out-from" value="Тель-Авив"></label>
+      <label>Куда<input id="f-out-to"></label>
+      <label>Вылет (местное)<input id="f-out-dep" type="time"></label>
+      <label>Прилёт (местное)<input id="f-out-arr" type="time"></label>
+    </div></fieldset>
+    <fieldset><legend>Рейс обратно</legend><div class="grid">
+      <label>Номер<input id="f-back-no"></label>
+      <label>Вылет (местное)<input id="f-back-dep" type="time"></label>
+      <label>Прилёт в Израиль<input id="f-back-arr" type="time"></label>
+    </div></fieldset>
+    <fieldset><legend>Город</legend>
+      <label style="display:flex;gap:8px;align-items:center;color:var(--ink)"><input id="f-newcity" type="checkbox" style="width:auto;margin:0"> Это не Лондон — убрать лондонские места, метро, викторину, разговорник, телефоны и памятку</label>
+      <div class="grid">
+        <label>Город<input id="f-city" placeholder="Рим"></label>
+        <label>«в …» (где?)<input id="f-city-prep" placeholder="Риме"></label>
+        <label>«от …» (кого? чего?)<input id="f-city-gen" placeholder="Рима"></label>
+        <label>«к …» (кому? чему?)<input id="f-city-dat" placeholder="Риму"></label>
+        <label>Часовой пояс<input id="f-tz" placeholder="Europe/Rome"></label>
+        <label>Валюта (знак)<input id="f-cur" placeholder="€"></label>
+      </div>
+    </fieldset>
+  </section>
+
+  <section class="card" id="days-card" hidden>
+    <h2>4. Программа по дням</h2>
+    <p class="muted legend">Один пункт — одна строка. Строки со словами «доплата / за дополнительную плату» станут <span class="opt">фиолетовыми</span> (опция). Время и место сбора можно оставить пустыми — тогда туристы увидят «время и место сообщит гид».</p>
+    <div id="days"></div>
+  </section>
+
+  <section class="card" id="extra-card" hidden>
+    <h2>Включено / не включено</h2>
+    <p class="muted">Найдено в тексте. Пока сохраняется в trip.json для будущего экрана «Условия тура».</p>
+    <div class="grid">
+      <label>Включено<textarea id="f-included" rows="6"></textarea></label>
+      <label>Не включено<textarea id="f-notincluded" rows="6"></textarea></label>
+    </div>
+  </section>
+
+  <div class="sticky row" id="actions" hidden>
+    <button id="preview">Предпросмотр</button>
+    <button id="download" class="ghost">Скачать trip.json</button>
+  </div>
+</main>
+
+<script>
+/* =========================================================
+   РАЗБОР ТЕКСТА ПРОГРАММЫ
+   Те же правила, что в скрипте сбора со Штурмана (shturman_scraper.py),
+   только на JavaScript — чтобы всё работало прямо в браузере.
+   ========================================================= */
+const DAY_RE = /^\s*(?:ДЕНЬ|ДНИ|ДНЯ)\s+(\d+)(?:\s*[-–—]\s*(\d+))?\s*[.:]?\s*(.*)$/i;
+const SECTIONS = [                       // порядок важен: «НЕ ВКЛЮЧЕНО» раньше «ВКЛЮЧЕНО»
+  ["notIncluded", /^\s*(В СТОИМОСТЬ )?(ТУРА )?НЕ ВКЛЮЧЕНО\s*:?/i],
+  ["included",    /^\s*(В СТОИМОСТЬ )?(ТУРА )?ВКЛЮЧЕНО\s*:?/i],
+  ["info",        /^\s*(ИНФОРМАЦИЯ|ВАЖНО)\s*:?\s*$/i],
+];
+const DURATION_RE = /(\d{1,2})\s*(?:ДНЕЙ|ДНЯ|ДЕНЬ)\b/i;
+const OPTION_RE = /за\s+дополнительную\s+плату|за\s+доплату|доплат/i;
+
+function parseProgram(text) {
+  const lines = text.split(/\r?\n/).map(l => l.replace(/\s+/g, " ").trim()).filter(Boolean);
+  const days = [], sec = { included: [], notIncluded: [], info: [] }, preface = [];
+  let day = null, cur = null;
+  for (const line of lines) {
+    const m = line.match(DAY_RE);
+    if (m) {
+      day = { from: +m[1], to: m[2] ? +m[2] : +m[1], title: m[3].trim(), lines: [] };
+      days.push(day); cur = null; continue;
+    }
+    const s = SECTIONS.find(([, re]) => re.test(line));
+    if (s) {
+      cur = s[0]; day = null;
+      const rest = line.replace(s[1], "").replace(/^[\s:]+/, "").trim();
+      if (rest) sec[cur].push(rest);
+      continue;
+    }
+    if (cur) sec[cur].push(line.replace(/^[•\-–]\s*/, ""));
+    else if (day) day.lines.push(line);
+    else preface.push(line);
+  }
+  // Абзац дня → пункты: по одному предложению на строку
+  days.forEach(d => {
+    d.items = d.lines.join(" ").split(/(?<=[.!?])\s+(?=[А-ЯЁA-Z«"(])/).map(s => s.trim()).filter(Boolean);
+  });
+  const dm = (preface.join(" ") + " " + text.slice(0, 300)).match(DURATION_RE);
+  return { days, sec, preface, declared: dm ? +dm[1] : null };
+}
+
+// Проверки — то, что агентства на Штурмане путают чаще всего
+function checkProgram(p) {
+  const out = [];
+  if (!p.days.length) { out.push(["err", "Не найдено ни одного дня. Дни должны начинаться словами «ДЕНЬ 1.» или «ДНИ 2–3.»"]); return out; }
+  const nums = p.days.flatMap(d => Array.from({ length: d.to - d.from + 1 }, (_, i) => d.from + i));
+  const max = Math.max(...nums);
+  const seen = new Set(), dup = new Set();
+  nums.forEach(n => seen.has(n) ? dup.add(n) : seen.add(n));
+  const missing = [];
+  for (let n = 1; n <= max; n++) if (!seen.has(n)) missing.push(n);
+  if (missing.length) out.push(["err", `Пропущен ${missing.length > 1 ? "дни" : "день"} ${missing.join(", ")}. Проверьте исходный текст.`]);
+  if (dup.size) out.push(["err", `День ${[...dup].join(", ")} встречается дважды. Возможно, на странице два варианта программы — оставьте один.`]);
+  if (p.declared && p.declared !== max) out.push(["warn", `В заголовке написано «${p.declared} дней», а в программе ${max}.`]);
+  p.days.forEach(d => { if (!d.items.length) out.push(["warn", `У дня ${d.from} нет описания.`]); });
+  const opts = p.days.reduce((n, d) => n + d.items.filter(i => OPTION_RE.test(i)).length, 0);
+  if (!out.some(c => c[0] === "err")) out.unshift(["ok", `Найдено дней: ${max}. Опций за доплату в тексте: ${opts}.`]);
+  return out;
+}
+
+/* =========================================================
+   ФОРМА
+   ========================================================= */
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+let BASE = null;      // текущий trip.json — основа для того, чего в тексте нет
+let parsed = null;
+
+const addDays = (iso, n) => { const d = new Date(iso + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+const fmtDate = iso => new Date(iso + "T12:00:00Z").toLocaleDateString("ru-RU", { day: "numeric", month: "long", weekday: "short", timeZone: "UTC" });
+
+function renderDays() {
+  const start = $("f-start").value;
+  $("days").innerHTML = parsed.days.map((d, i) => `
+    <div class="day" data-i="${i}">
+      <div class="day-h">${d.from === d.to ? `День ${d.from}` : `Дни ${d.from}–${d.to}`}
+        <span class="muted">${start ? fmtDate(addDays(start, d.from - 1)) : "укажите дату начала"}</span></div>
+      <label>Название дня<input data-f="title" value="${esc(d.title)}"></label>
+      <div class="grid">
+        <label>Время сбора<input data-f="time" type="time" value="${esc(d.time || "")}"></label>
+        <label>Место сбора<input data-f="place" value="${esc(d.place || "")}" placeholder="Холл отеля"></label>
+      </div>
+      <label>Пункты дня<textarea data-f="items">${esc(d.items.join("\n"))}</textarea></label>
+    </div>`).join("");
+}
+
+// Правки в полях дня сразу пишем обратно в parsed
+document.addEventListener("input", e => {
+  const box = e.target.closest(".day"); if (!box) return;
+  const d = parsed.days[+box.dataset.i], f = e.target.dataset.f;
+  if (f === "items") d.items = e.target.value.split("\n").map(s => s.trim()).filter(Boolean);
+  else d[f] = e.target.value;
+});
+$("f-start").addEventListener("change", () => parsed && renderDays());
+
+$("parse").addEventListener("click", () => {
+  parsed = parseProgram($("src").value);
+  $("checks").innerHTML = checkProgram(parsed).map(([k, t]) => `<div class="check ${k}">${esc(t)}</div>`).join("");
+  ["checks-card", "trip-card", "days-card", "extra-card", "actions"].forEach(id => $(id).hidden = id !== "checks-card" && !parsed.days.length);
+  $("checks-card").hidden = false;
+  $("f-included").value = parsed.sec.included.join("\n");
+  $("f-notincluded").value = parsed.sec.notIncluded.join("\n");
+  if (!$("f-title").value && parsed.preface[0]) $("f-title").value = parsed.preface[0];
+  renderDays();
+  $("checks-card").scrollIntoView({ behavior: "smooth" });
+});
+
+/* =========================================================
+   СБОРКА trip.json
+   Берём текущий trip.json как основу (интерфейс, разговорник, полезное)
+   и заменяем всё, что относится к этой поездке.
+   ========================================================= */
+// Смещение часового пояса на дату: "+02:00" (для поля at у рейса)
+function tzOffset(tz, iso) {
+  try {
+    const p = new Intl.DateTimeFormat("en-US", { timeZone: tz, timeZoneName: "longOffset" }).formatToParts(new Date(iso + "T12:00:00Z"));
+    const v = p.find(x => x.type === "timeZoneName").value.replace("GMT", "");
+    return v || "+00:00";
+  } catch { return "+00:00"; }
+}
+const val = id => $(id).value.trim();
+
+function buildTrip() {
+  const T = structuredClone(BASE);
+  const start = val("f-start");
+  if (!start) throw new Error("Укажите дату начала тура.");
+  const total = Math.max(...parsed.days.map(d => d.to));
+  const end = addDays(start, total - 1);
+  const city = val("f-city") || T.city.name;
+  const tz = val("f-tz") || T.tz;
+
+  if ($("f-newcity").checked) {
+    // Лондонское содержимое к другому городу не относится
+    // и разговорник: он пишется под язык страны (британский к Италии не подходит)
+    Object.assign(T, { places: [], lines: [], walks: [], contacts: [], tips: [], apps: [], phrases: [], phrasesBasics: [] });
+    T.quiz = { ...T.quiz, title: `Знаешь ли ты ${city}?`, questions: [] };
+    T.help = { backToHotel: "Если связи нет — возвращайтесь в отель: нажмите «Показать таксисту».", theft: [], links: [] };
+    T.shelves = { season: null, eveningCats: [], eveningSub: "" };
+    T.transport = { colors: {}, defaultLine: null, altHome: null };
+    T.city = { name: city, gen: val("f-city-gen") || city, dat: val("f-city-dat") || city, prep: val("f-city-prep") || city, flag: "", mapSuffix: city };
+    T.hotel = {};
+  }
+  T.title = val("f-title") || T.title;
+  T.start = start; T.end = end; T.tz = tz;
+  T.eyebrow = [`${fmtDate(start).replace(/^\S+\s/, "")} – ${fmtDate(end).replace(/^\S+\s/, "")}`, val("f-agency"), val("f-guide") && "гид " + val("f-guide")].filter(Boolean).join(" · ");
+  T.guide = { name: val("f-guide"), phone: val("f-guide-phone") };
+  T.currency = { ...T.currency, symbol: val("f-cur") || T.currency.symbol };
+
+  const ll = val("f-hotel-ll").split(/[,\s]+/).map(Number).filter(n => !isNaN(n));
+  T.hotel = { ...T.hotel, name: val("f-hotel") || T.hotel.name || "", address: val("f-hotel-addr") || T.hotel.address || "", phone: val("f-hotel-phone") || T.hotel.phone || "" };
+  if (ll.length === 2) T.hotel.ll = ll; else if ($("f-newcity").checked) delete T.hotel.ll;
+  if (T.hotel.address) T.hotel.maps = "https://www.google.com/maps/dir/?api=1&destination=" + encodeURIComponent(T.hotel.name + " " + T.hotel.address);
+
+  const home = T.home.tz;
+  const flight = (no, from, to, dep, arr, date, depTz, tzName) => ({
+    code: no.replace(/\d.*/, ""), no, from, to, dep, arr,
+    at: dep ? `${date}T${dep}:00${tzOffset(depTz, date)}` : null, tz: depTz, tzName });
+  T.flights = { ...T.flights,
+    out: flight(val("f-out-no"), val("f-out-from"), val("f-out-to") || city, val("f-out-dep"), val("f-out-arr"), start, home, "по " + T.home.dat),
+    back: flight(val("f-back-no"), val("f-out-to") || city, val("f-out-from"), val("f-back-dep"), val("f-back-arr"), end, tz, "по " + (T.city.dat || city)) };
+
+  // Дни: «ДНИ 2–3» превращаются в два дня с одним названием
+  T.days = [];
+  parsed.days.forEach(d => {
+    for (let n = d.from; n <= d.to; n++) {
+      const items = n === d.from ? d.items : [`Продолжение программы: ${d.title}`];
+      T.days.push({
+        date: addDays(start, n - 1), title: d.title || `День ${n}`,
+        meeting: d.time || d.place ? { time: d.time || null, place: d.place || "" } : { time: null, wa: "время и место" },
+        items: items.map(t => OPTION_RE.test(t) ? { t, opt: true } : { t })
+      });
+    }
+  });
+  T.options = [];       // карточки опций с ценами — следующий шаг конструктора
+  T.included = $("f-included").value.split("\n").map(s => s.trim()).filter(Boolean);
+  T.notIncluded = $("f-notincluded").value.split("\n").map(s => s.trim()).filter(Boolean);
+  return T;
+}
+
+function withTrip(fn) {
+  try { fn(buildTrip()); } catch (e) { alertBox(e.message); }
+}
+function alertBox(msg) {
+  $("checks").insertAdjacentHTML("afterbegin", `<div class="check err">${esc(msg)}</div>`);
+  $("checks-card").scrollIntoView({ behavior: "smooth" });
+}
+
+$("preview").addEventListener("click", () => withTrip(T => {
+  localStorage.setItem("tripDraft", JSON.stringify(T));
+  window.open("index.html?draft#program", "_blank");
+}));
+$("download").addEventListener("click", () => withTrip(T => {
+  const blob = new Blob([JSON.stringify(T, null, 2)], { type: "application/json" });
+  const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: "trip.json" });
+  a.click(); URL.revokeObjectURL(a.href);
+}));
+
+// Основа — текущий trip.json; подсказки в полях города — из него же
+fetch("trip.json").then(r => r.json()).then(T => {
+  BASE = T;
+  $("f-city").placeholder = T.city.name; $("f-tz").placeholder = T.tz; $("f-cur").placeholder = T.currency.symbol;
+}).catch(() => alertBox("Не удалось загрузить trip.json — откройте конструктор с того же сайта, что и приложение."));
+</script>
+</body>
+</html>

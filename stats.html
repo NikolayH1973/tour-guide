@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>Лондон — статистика</title>
+<style>
+  :root { --bg:#eef1f5; --surface:#fff; --ink:#142033; --muted:#5b6678; --line:#d9dee6; --accent:#c8102e; --tube:#003688; --green:#1e8a4c; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0d1522; --surface:#172235; --ink:#eef2f8; --muted:#a3afc2; --line:#2a3850; --accent:#ff5a6e; --tube:#6f95ff; --green:#7fd6a2; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif; padding:16px 14px 40px; }
+  .wrap { max-width:720px; margin:0 auto; }
+  h1 { font-family:Georgia,serif; font-size:1.6rem; margin:0 0 2px; }
+  h2 { font-size:1.05rem; margin:0 0 10px; }
+  .muted { color:var(--muted); } .small { font-size:.88rem; }
+  .card { background:var(--surface); border:1px solid var(--line); border-radius:16px; padding:16px; margin-top:14px; }
+  .kpis { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin-top:14px; }
+  @media (min-width:600px) { .kpis { grid-template-columns:repeat(4,minmax(0,1fr)); } }
+  .kpi { background:var(--surface); border:1px solid var(--line); border-radius:16px; padding:14px; }
+  .kpi b { display:block; font-size:1.9rem; line-height:1.1; font-variant-numeric:tabular-nums; }
+  .kpi span { font-size:.85rem; color:var(--muted); }
+  .bars { display:grid; gap:7px; }
+  .bar { display:grid; grid-template-columns:88px 1fr 76px; gap:8px; align-items:center; font-size:.9rem; }
+  .bar i { display:block; height:14px; border-radius:7px; background:var(--tube); min-width:2px; }
+  .bar .n { text-align:right; font-variant-numeric:tabular-nums; color:var(--muted); }
+  .cols { display:grid; gap:14px; } @media (min-width:600px) { .cols { grid-template-columns:1fr 1fr; } .cols .card { margin-top:0; } }
+  table { width:100%; border-collapse:collapse; font-size:.92rem; }
+  td { padding:6px 0; border-bottom:1px solid var(--line); vertical-align:top; }
+  td.n { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; padding-left:10px; font-weight:600; }
+  tr:last-child td { border-bottom:0; }
+  form { display:flex; gap:8px; margin-top:14px; }
+  input, button { font:inherit; padding:12px 14px; border-radius:12px; border:1px solid var(--line); background:var(--surface); color:var(--ink); }
+  input { flex:1; min-width:0; } button { background:var(--ink); color:var(--surface); border:0; font-weight:700; cursor:pointer; }
+  .err { color:var(--accent); font-weight:600; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>📊 Лондон — статистика</h1>
+  <div class="muted small" id="sub">Анонимно: без имён, телефонов и местоположения.</div>
+  <div id="out"></div>
+</div>
+<script>
+/* Страница отчёта. Данные отдаёт функция /api/stats только с правильным ключом (STATS_KEY в Netlify).
+   Ключ берём из ссылки ?key=… или из формы и запоминаем на этом устройстве. */
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+const VIEWS = { today:"Сегодня", program:"Программа", options:"Опции (блок)", places:"Места", help:"Я потерялся", tools:"Полезное", phrases:"Разговорник", quiz:"🧠 Викторина", cards:"🗣️ Тренажёр фраз" };
+const OPTS = { windsor:"Виндзорский замок", tower:"Тауэр с гидом", museum:"Британский музей с гидом", stratford:"Стратфорд и Оксфорд" };
+const ACTS = { signup:"📝 Записаться на опции", route:"🚇 Как добраться", waze:"🚗 Waze в аэропорт", photos:"📷 Фото места/опции", whatsapp:"💬 WhatsApp гиду", call:"📞 Звонок", big:"🪧 Крупная карточка (таксисту и т. п.)", quiz:"🧠 Раунд викторины пройден" };
+const PLACES_SUB = { metro:"🚇 Схема метро", near:"📍 Что рядом со мной" };
+const CATS = { all:"Все места", photo:"Для фото", sight:"Достопримечательности", museum:"Музеи", xmas:"Ярмарки", view:"Виды", food:"Еда", pub:"Пабы и музыка", flea:"Блошиные рынки" };
+const WALKS = { xmas:"Рождественские рынки центра", wonder:"Winter Wonderland и огни", westminster:"Вестминстер и Темза", city:"Сити и Темза" };
+const SHELVES = { xmas:"Ярмарки", prog:"Места программы", eve:"Куда пойти вечером", hotel:"Рядом с отелем", free:"Бесплатно" };
+const DAY = iso => { const [y, m, d] = iso.split("-").map(Number); return new Date(y, m - 1, d).toLocaleDateString("ru-RU", { day:"numeric", month:"short", weekday:"short" }); };
+
+function keyFromPage() {
+  const k = new URLSearchParams(location.search).get("key");
+  if (k) { try { localStorage.setItem("statsKey", k); } catch {} history.replaceState(null, "", location.pathname); return k; }
+  try { return localStorage.getItem("statsKey") || ""; } catch { return ""; }
+}
+function askKey(msg) {
+  $("#out").innerHTML = `${msg ? `<p class="err">${esc(msg)}</p>` : ""}
+    <form id="kf"><input id="k" type="password" placeholder="Секретное слово (STATS_KEY)" autocomplete="current-password"><button>Открыть</button></form>`;
+  $("#kf").onsubmit = e => { e.preventDefault(); try { localStorage.setItem("statsKey", $("#k").value.trim()); } catch {} load(); };
+}
+const rows = (list, max = 12) => list.length
+  ? `<table>${list.slice(0, max).map(([name, n]) => `<tr><td>${esc(name)}</td><td class="n">${n}</td></tr>`).join("")}</table>`
+  : `<p class="muted small">Пока пусто</p>`;
+const pick = (ev, prefix, label) => Object.entries(ev).filter(([k]) => k.startsWith(prefix))
+  .map(([k, n]) => [label(k.slice(prefix.length)), n]).reduce((acc, [k, n]) => { acc[k] = (acc[k] || 0) + n; return acc; }, {});
+const sorted = obj => Object.entries(obj).sort((a, b) => b[1] - a[1]);
+
+function render(r) {
+  const t = r.totals, ev = r.events;
+  const pct = (a, b) => b ? Math.round(a * 100 / b) + "%" : "—";
+  const maxOpens = Math.max(1, ...r.days.map(d => d.opens));
+  const screens = { ...pick(ev, "view:", k => VIEWS[k] || k), ...pick(ev, "places:", k => PLACES_SUB[k] || k), ...pick(ev, "shelf:", k => "Полка: " + (SHELVES[k] || k)), ...pick(ev, "walk:", k => "🚶 Прогулка: " + (WALKS[k] || k)) };
+  $("#sub").textContent = `Анонимно: без имён, телефонов и местоположения · обновлено ${new Date().toLocaleTimeString("ru-RU", { hour:"2-digit", minute:"2-digit" })}`;
+  $("#out").innerHTML = `
+    <div class="kpis">
+      <div class="kpi"><b>${t.installed}</b><span>людей с приложением на экране</span></div>
+      <div class="kpi"><b>${t.opensApp}</b><span>открытий в установленном приложении</span></div>
+      <div class="kpi"><b>${t.opens}</b><span>открытий всего (с браузером)</span></div>
+      <div class="kpi"><b>${t.devices}</b><span>браузеров и приложений</span></div>
+    </div>
+    <p class="small muted" style="margin:8px 2px 0"><b>Как читать:</b> «людей с приложением на экране» — самая точная цифра людей: одно установленное приложение — один человек.
+      «Браузеров и приложений» больше, чем людей: на iPhone ссылка из WhatsApp, Safari и значок на экране хранят данные отдельно, и один телефон считается 2–3 раза.
+      Экраны, места и кнопки ниже считаются точно — каждое нажатие один раз.<br>
+      iPhone ${t.ios} · Android ${t.android} · компьютер ${t.desktop} · открывали в разные дни: ${t.returning}. Открытия без интернета приходят, когда появится связь.</p>
+    <div class="card"><h2>Открытия по дням</h2><p class="small muted" style="margin:-4px 0 10px">всего · 📱 из них в установленном приложении</p>
+      <div class="bars">${r.days.length ? r.days.map(d => `<div class="bar"><span>${DAY(d.day)}</span><i style="width:${Math.round(d.opens * 100 / maxOpens)}%"></i><span class="n">${d.opens}${d.opensApp ? ` · 📱${d.opensApp}` : ""}</span></div>`).join("") : `<p class="muted small">Пока пусто</p>`}</div>
+    </div>
+    <div class="cols" style="margin-top:14px">
+      <div class="card"><h2>Экраны</h2>${rows(sorted(screens))}</div>
+      <div class="card"><h2>Действия</h2>${rows(sorted(pick(ev, "act:", k => ACTS[k.split(":")[0]] || k)))}</div>
+      <div class="card"><h2>Топ мест</h2>${rows(sorted(pick(ev, "place:", k => k)), 15)}</div>
+      <div class="card"><h2>Опции — открывали описание</h2>${rows(sorted(pick(ev, "opt:", k => OPTS[k] || k)))}</div>
+      <div class="card"><h2>Пояснения ⓘ в программе</h2>${rows(sorted(pick(ev, "info:", k => k)))}</div>
+      <div class="card"><h2>Категории мест</h2>${rows(sorted(pick(ev, "cat:", k => CATS[k] || k)))}</div>
+    </div>
+    <div class="card"><h2>Обнулить</h2>
+      <p class="small muted">Удалит всю собранную статистику — например, после ваших тестов, перед тем как ссылка уйдёт группе. Отменить нельзя.</p>
+      <button id="reset" type="button" style="background:var(--accent)">🗑 Обнулить статистику</button>
+    </div>`;
+  $("#reset").onclick = reset;
+}
+async function reset() {
+  if (!confirm("Удалить всю статистику? Отменить будет нельзя.")) return;
+  const key = keyFromPage();
+  const res = await fetch("/api/stats?key=" + encodeURIComponent(key), { method: "DELETE" });
+  if (!res.ok) return alert("Не получилось обнулить (" + res.status + ")");
+  load();
+}
+async function load() {
+  const key = keyFromPage();
+  if (!key) return askKey();
+  $("#out").innerHTML = `<p class="muted">Загружаю…</p>`;
+  try {
+    const res = await fetch("/api/stats?key=" + encodeURIComponent(key), { cache: "no-store" });
+    if (res.status === 403) { try { localStorage.removeItem("statsKey"); } catch {} return askKey("Неверное секретное слово"); }
+    if (res.status === 503) return askKey("STATS_KEY ещё не задан в настройках Netlify");
+    if (!res.ok) throw new Error(res.status);
+    render(await res.json());
+  } catch (e) { $("#out").innerHTML = `<p class="err">Не удалось загрузить (${esc(e.message)}). Проверьте интернет и обновите страницу.</p>`; }
+}
+load();
+</script>
+</body>
+</html>

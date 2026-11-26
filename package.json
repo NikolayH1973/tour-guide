@@ -1,0 +1,9 @@
+{
+  "name": "tour-guide",
+  "private": true,
+  "type": "module",
+  "description": "Шаблон PWA-путеводителя для групповых туров. Зависимость нужна только функциям статистики на Netlify.",
+  "dependencies": {
+    "@netlify/blobs": "^11.1.0"
+  }
+}
