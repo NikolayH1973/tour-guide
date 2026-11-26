@@ -34,6 +34,9 @@ button.ghost { background:transparent; color:var(--accent); }
 .opt { color: var(--opt); font-weight: 600; }
 fieldset { border:1px dashed var(--line); border-radius:10px; padding:10px 12px 0; margin:0 0 12px; }
 legend { font-size:.85rem; font-weight:600; padding:0 6px; }
+.leg { border-bottom:1px dotted var(--line); margin-bottom:10px; }
+.leg-h { display:flex; justify-content:space-between; align-items:center; font-size:.85rem; font-weight:600; margin-bottom:6px; }
+.leg-h button { min-height:32px; padding:4px 10px; font-size:.8rem; }
 .sticky { position: sticky; bottom: 0; background: var(--bg); padding: 12px 0; border-top: 1px solid var(--line); }
 </style>
 </head>
@@ -71,18 +74,11 @@ legend { font-size:.85rem; font-weight:600; padding:0 6px; }
       <label>Телефон отеля<input id="f-hotel-phone" placeholder="+39 06 000 0000"></label>
       <label>Координаты из Google Карт<input id="f-hotel-ll" placeholder="41.9028, 12.4964"></label>
     </div><p class="muted" style="margin-top:0">Координаты: в Google Картах нажмите на отель правой кнопкой — первая строка меню. Без них не будет погоды.</p></fieldset>
-    <fieldset><legend>Рейс туда</legend><div class="grid">
-      <label>Номер<input id="f-out-no" placeholder="LY381"></label>
-      <label>Откуда<input id="f-out-from" value="Тель-Авив"></label>
-      <label>Куда<input id="f-out-to"></label>
-      <label>Вылет (местное)<input id="f-out-dep" type="time"></label>
-      <label>Прилёт (местное)<input id="f-out-arr" type="time"></label>
-    </div></fieldset>
-    <fieldset><legend>Рейс обратно</legend><div class="grid">
-      <label>Номер<input id="f-back-no"></label>
-      <label>Вылет (местное)<input id="f-back-dep" type="time"></label>
-      <label>Прилёт в Израиль<input id="f-back-arr" type="time"></label>
-    </div></fieldset>
+    <fieldset><legend>Рейсы туда</legend><div id="legs-out"></div>
+      <button type="button" class="ghost" data-add-leg="out" style="margin-bottom:12px">+ пересадка</button></fieldset>
+    <fieldset><legend>Рейсы обратно</legend><div id="legs-back"></div>
+      <button type="button" class="ghost" data-add-leg="back" style="margin-bottom:12px">+ пересадка</button></fieldset>
+    <label>Сколько лететь — для фразы «… в самолёте — время подготовиться»<input id="f-duration" placeholder="Пять часов"></label>
     <fieldset><legend>Город</legend>
       <label style="display:flex;gap:8px;align-items:center;color:var(--ink)"><input id="f-newcity" type="checkbox" style="width:auto;margin:0"> Это не Лондон — убрать лондонские места, метро, викторину, разговорник, телефоны и памятку</label>
       <div class="grid">
@@ -228,6 +224,61 @@ $("parse").addEventListener("click", () => {
 });
 
 /* =========================================================
+   РЕЙСЫ С ПЕРЕСАДКАМИ
+   Каждое направление — список сегментов. Часовой пояс сегмента нужен,
+   чтобы приложение спрашивало статус рейса в правильное время:
+   рейс из Дубая вылетает по дубайскому времени, а не по израильскому.
+   ========================================================= */
+const TZ_BY_CITY = {
+  "тель-авив": "Asia/Jerusalem", "дубай": "Asia/Dubai", "абу-даби": "Asia/Dubai", "доха": "Asia/Qatar",
+  "стамбул": "Europe/Istanbul", "анталья": "Europe/Istanbul", "афины": "Europe/Athens", "ларнака": "Asia/Nicosia",
+  "франкфурт": "Europe/Berlin", "мюнхен": "Europe/Berlin", "берлин": "Europe/Berlin", "вена": "Europe/Vienna",
+  "варшава": "Europe/Warsaw", "прага": "Europe/Prague", "будапешт": "Europe/Budapest", "рим": "Europe/Rome",
+  "милан": "Europe/Rome", "париж": "Europe/Paris", "амстердам": "Europe/Amsterdam", "лондон": "Europe/London",
+  "мадрид": "Europe/Madrid", "барселона": "Europe/Madrid", "лиссабон": "Europe/Lisbon", "цюрих": "Europe/Zurich",
+  "аддис-абеба": "Africa/Addis_Ababa", "ташкент": "Asia/Tashkent", "бангкок": "Asia/Bangkok", "сингапур": "Asia/Singapore",
+  "хошимин": "Asia/Ho_Chi_Minh", "ханой": "Asia/Ho_Chi_Minh", "токио": "Asia/Tokyo", "сеул": "Asia/Seoul",
+  "пекин": "Asia/Shanghai", "шанхай": "Asia/Shanghai", "гонконг": "Asia/Hong_Kong", "дели": "Asia/Kolkata", "нью-йорк": "America/New_York"
+};
+const guessTz = city => TZ_BY_CITY[String(city || "").trim().toLowerCase()] || "";
+const LEGS = { out: [], back: [] };
+const newLeg = (dir, prev) => ({ no: "", from: prev ? prev.to : (dir === "out" ? "Тель-Авив" : ""), to: dir === "back" ? "Тель-Авив" : "",   // обратно последний сегмент всегда летит домой
+  date: prev ? prev.date : "", dep: "", arr: "", next: false, tz: prev ? guessTz(prev.to) : (dir === "out" ? "Asia/Jerusalem" : "") });
+LEGS.out.push(newLeg("out")); LEGS.back.push(newLeg("back"));
+
+function renderLegs(dir) {
+  const many = LEGS[dir].length > 1;
+  $("legs-" + dir).innerHTML = LEGS[dir].map((l, i) => `
+    <div class="leg" data-dir="${dir}" data-n="${i}">
+      ${many ? `<div class="leg-h">Сегмент ${i + 1}<button type="button" class="ghost" data-del-leg>убрать</button></div>` : ""}
+      <div class="grid">
+        <label>Номер рейса<input data-l="no" value="${esc(l.no)}" placeholder="${dir === "out" ? "FZ1546" : "VN…"}"></label>
+        <label>Откуда<input data-l="from" value="${esc(l.from)}"></label>
+        <label>Куда<input data-l="to" value="${esc(l.to)}"></label>
+        <label>Дата вылета<input data-l="date" type="date" value="${esc(l.date)}"></label>
+        <label>Вылет (местное)<input data-l="dep" type="time" value="${esc(l.dep)}"></label>
+        <label>Прилёт (местное)<input data-l="arr" type="time" value="${esc(l.arr)}"></label>
+        <label>Часовой пояс вылета<input data-l="tz" value="${esc(l.tz)}" placeholder="Asia/Dubai"></label>
+        <label style="display:flex;gap:8px;align-items:center;color:var(--ink);margin-top:24px"><input data-l="next" type="checkbox" ${l.next ? "checked" : ""} style="width:auto;margin:0"> прилёт на следующий день</label>
+      </div>
+    </div>`).join("");
+}
+document.addEventListener("input", e => {
+  const box = e.target.closest(".leg"); if (!box) return;
+  const l = LEGS[box.dataset.dir][+box.dataset.n], k = e.target.dataset.l;
+  l[k] = e.target.type === "checkbox" ? e.target.checked : e.target.value;
+  // Город вылета поменялся — подставим его часовой пояс, если знаем
+  if (k === "from" && guessTz(l.from)) { l.tz = guessTz(l.from); box.querySelector('[data-l="tz"]').value = l.tz; }
+});
+document.addEventListener("click", e => {
+  const add = e.target.closest("[data-add-leg]");
+  if (add) { const dir = add.dataset.addLeg, list = LEGS[dir]; list.push(newLeg(dir, list[list.length - 1])); renderLegs(dir); }
+  const del = e.target.closest("[data-del-leg]");
+  if (del) { const box = del.closest(".leg"); LEGS[box.dataset.dir].splice(+box.dataset.n, 1); renderLegs(box.dataset.dir); }
+});
+renderLegs("out"); renderLegs("back");
+
+/* =========================================================
    СБОРКА trip.json
    Берём текущий trip.json как основу (интерфейс, разговорник, полезное)
    и заменяем всё, что относится к этой поездке.
@@ -273,13 +324,27 @@ function buildTrip() {
   if (ll.length === 2) T.hotel.ll = ll; else if ($("f-newcity").checked) delete T.hotel.ll;
   if (T.hotel.address) T.hotel.maps = "https://www.google.com/maps/dir/?api=1&destination=" + encodeURIComponent(T.hotel.name + " " + T.hotel.address);
 
+  // Рейсы: сегменты + краткая сводка направления (её читает обратный отсчёт и время сбора в аэропорту)
   const home = T.home.tz;
-  const flight = (no, from, to, dep, arr, date, depTz, tzName) => ({
-    code: no.replace(/\d.*/, ""), no, from, to, dep, arr,
-    at: dep ? `${date}T${dep}:00${tzOffset(depTz, date)}` : null, tz: depTz, tzName });
-  T.flights = { ...T.flights,
-    out: flight(val("f-out-no"), val("f-out-from"), val("f-out-to") || city, val("f-out-dep"), val("f-out-arr"), start, home, "по " + T.home.dat),
-    back: flight(val("f-back-no"), val("f-out-to") || city, val("f-out-from"), val("f-back-dep"), val("f-back-arr"), end, tz, "по " + (T.city.dat || city)) };
+  const tzName = tz => tz === home ? "по " + T.home.dat : "по местному времени";
+  const direction = (dir, defDate) => {
+    const legs = LEGS[dir].filter(l => l.no || l.dep || l.to).map(l => {
+      const date = l.date || defDate, tz = l.tz || guessTz(l.from) || (dir === "out" ? home : tz0);
+      return { no: l.no.trim().toUpperCase(), from: l.from.trim(), to: l.to.trim(), dep: l.dep, arr: l.arr + (l.next ? " (+1)" : ""),
+               date, at: l.dep ? `${date}T${l.dep}:00${tzOffset(tz, date)}` : null, tz, tzName: tzName(tz) };
+    });
+    if (!legs.length) return T.flights[dir];
+    const first = legs[0], last = legs[legs.length - 1];
+    return { no: legs.map(l => l.no).filter(Boolean).join(" + "), from: first.from, to: last.to, dep: first.dep, arr: last.arr,
+             at: first.at, tz: first.tz, tzName: first.tzName,
+             via: legs.length > 1 ? legs.slice(0, -1).map(l => l.to).join(", ") : null, legs };
+  };
+  const tz0 = tz;
+  T.flights = { out: direction("out", start), back: direction("back", end), durationText: val("f-duration") || T.flights.durationText };
+  for (const dir of ["out", "back"]) {
+    const d = T.flights[dir];
+    if (d && d.legs && d.legs.some(l => !l.dep)) throw new Error(`Рейсы ${dir === "out" ? "туда" : "обратно"}: укажите время вылета у каждого сегмента.`);
+  }
 
   // Дни: «ДНИ 2–3» превращаются в два дня с одним названием
   T.days = [];

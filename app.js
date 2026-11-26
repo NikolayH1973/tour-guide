@@ -215,11 +215,13 @@ function flightWindow(f) {
   const dep = Date.parse(f.at), now = Date.now();
   return now < dep - FL_OPEN ? "early" : now > dep + FL_CLOSE ? "over" : "live";
 }
+// Сегменты направления: рейс с пересадкой хранит их в legs, прямой рейс — сам себе сегмент
+const legsOf = dir => dir && dir.legs && dir.legs.length ? dir.legs : (dir ? [dir] : []);
 async function loadFlights(force) {
   if (!/^https?:$/.test(location.protocol)) return;       // открыто как файл — посредника нет
-  for (const f of [TOUR.flights.out, TOUR.flights.back]) {
+  for (const f of [...legsOf(TOUR.flights.out), ...legsOf(TOUR.flights.back)]) {
     if (flightWindow(f) !== "live") continue;              // вне окна не тратим запросы
-    if (FL_TEST !== null && f !== TOUR.flights.out) continue; // в тесте карточка только BA405 — второй запрос не нужен
+    if (FL_TEST !== null && f !== legsOf(TOUR.flights.out)[0]) continue; // в тесте карточка только BA405 — второй запрос не нужен
     const last = FL[f.no];
     if (!force && last && Date.now() - last.at < 5 * 60e3) continue;   // не чаще раза в 5 минут
     try {
@@ -278,7 +280,7 @@ function flightCard(f) {
     ${win === "live" && d && d.state === "ok" ? `<p class="small muted">${tx("k77", String(when.getHours()).padStart(2, "0"), String(when.getMinutes()).padStart(2, "0"), navigator.onLine ? "" : tx("k76"))}</p>` : ""}
     <div class="btn-row">
       <a class="btn ghost" href="https://www.flightradar24.com/data/flights/${f.no.toLowerCase()}" target="_blank" rel="noopener">Flightradar24</a>
-      <a class="btn ghost" href="https://www.flightaware.com/live/flight/BAW${f.no.slice(2)}" target="_blank" rel="noopener">FlightAware</a>
+      <a class="btn ghost" href="https://www.flightaware.com/live/flight/${encodeURIComponent(f.no)}" target="_blank" rel="noopener">FlightAware</a>
     </div>
   </article>`;
 }
@@ -302,7 +304,7 @@ function renderToday() {
         <button type="button" class="nav-btn" ${next ? `data-pv="${next.date}"` : "disabled"} aria-label="${tx("k83")}">→</button>
       </nav>
       <p class="hint">${tx("k90")}</p>
-      ${idx === 0 ? flightCard(TOUR.flights.out) : idx === TOUR.days.length - 1 ? flightCard(TOUR.flights.back) : ""}
+      ${idx === 0 ? legsOf(TOUR.flights.out).map(flightCard).join("") : idx === TOUR.days.length - 1 ? legsOf(TOUR.flights.back).map(flightCard).join("") : ""}
       <article class="card now">
         <span class="pill gold">${tx("k91", idx + 1, TOUR.days.length, wday(d.date), fmt(d.date))}</span>
         <h2>${esc(d.title)}</h2>
@@ -331,7 +333,7 @@ function renderToday() {
       <article class="card now">
         <span class="eyebrow">${tx("k101")}</span>
         <div><span class="big-num">${n}</span> <span class="muted">${plural(n,tx("k93"),tx("k94"),tx("k95"))}</span></div>
-        <p>${tx("k102", f.no, f.from, f.dep, f.to, f.arr, wday(TOUR.start), fmt(TOUR.start))}</p>
+        <p>${f.via ? tx("k102via", f.no, f.from, f.dep, f.to, f.arr, wday(TOUR.start), fmt(TOUR.start), f.via) : tx("k102", f.no, f.from, f.dep, f.to, f.arr, wday(TOUR.start), fmt(TOUR.start))}</p>
         ${WX && WX.days && WX.days[TOUR.start] ? `<div><span class="small muted">${tx("k96", TOUR.city.prep)}</span>${wxLine(TOUR.start)}</div>` : `<p class="small muted">${tx("k97")}</p>`}
       </article>
       <article class="card">
@@ -339,7 +341,7 @@ function renderToday() {
         ${airportHtml()}
         <p class="tip">${tx("k104")}</p>
       </article>
-      ${flightCard(TOUR.flights.out)}
+      ${legsOf(TOUR.flights.out).map(flightCard).join("")}
       <article class="card">
         <h3>${tx("k105", cnt, list.length)}</h3>
         <div class="progress"><i style="width:${Math.round(cnt / list.length * 100)}%"></i></div>
