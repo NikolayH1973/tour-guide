@@ -20,9 +20,18 @@ const wday = iso => WDAYS[parse(iso).getDay()];
 // "Сегодня" по местному времени тура: телефон может ещё жить по домашнему
 // Первая буква — заглавная: «в Лондоне» в начале предложения становится «В Лондоне»
 const cap = s => s ? s[0].toUpperCase() + s.slice(1) : s;
+// Какое сегодня число для программы:
+//   до вылета и в день вылета группа дома — считаем по домашнему времени (Израиль);
+//   со следующего дня — по времени места поездки.
+// Иначе при разнице в 5 часов (Вьетнам) вечером в Израиле обратный отсчёт «терял» день,
+// а в день вылета, ещё в аэропорту, приложение уже показывало день 2.
 function tripToday() {
-  try { return new Intl.DateTimeFormat("en-CA", { timeZone: TOUR.tz }).format(new Date()); }
-  catch { const d = new Date(); return d.toISOString().slice(0,10); }
+  const dateIn = tz => new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date());
+  try {
+    const home = TOUR.home && TOUR.home.tz ? dateIn(TOUR.home.tz) : null;
+    if (home && home <= TOUR.start) return home;
+    return dateIn(TOUR.tz);
+  } catch { return new Date().toISOString().slice(0, 10); }
 }
 const daysBetween = (a, b) => Math.round((parse(b) - parse(a)) / 86400000);
 function plural(n, one, few, many) {
