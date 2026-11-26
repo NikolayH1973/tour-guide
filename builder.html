@@ -302,7 +302,8 @@ $("parse").addEventListener("click", () => {
 // Заполняем форму из карточки выезда. То, что человек уже ввёл сам, не трогаем.
 function applyDeparture(dep) {
   if (dep.start && !$("f-start").value) $("f-start").value = dep.start;
-  if (dep.title && !$("f-city").value) { $("f-city").value = dep.title; fillDestination(); }
+  if (dep.title && !$("f-city").value) $("f-city").value = dep.title;
+  if ($("f-city").value) fillDestination();   // даже если браузер сам вернул старое значение в поле
   if (dep.guide && !$("f-guide").value) $("f-guide").value = dep.guide;
   if (dep.notes.length && !$("f-notes").value) $("f-notes").value = dep.notes.join("\n");
   const end = dep.end || (dep.start && parsed.days.length ? addDays(dep.start, Math.max(...parsed.days.map(d => d.to)) - 1) : "");
@@ -579,6 +580,10 @@ function buildTrip() {
   const total = Math.max(...parsed.days.map(d => d.to));
   const end = addDays(start, total - 1);
   const city = val("f-city") || T.city.name;
+  if (!val("f-tz")) {
+    const name = val("f-city"), outLegs = LEGS.out.filter(l => l.to);
+    setTz((DEST[name.toLowerCase()] || [])[3] || guessTz(name) || (outLegs.length ? guessTz(outLegs[outLegs.length - 1].to) : ""));
+  }
   if ($("f-newcity").checked && !val("f-tz")) {
     document.querySelector("#trip-card details").open = true;
     throw new Error("Направление: выберите страну в списке «Часовой пояс». По ней приложение понимает, какой день программы сегодня (во Вьетнаме, например, полночь наступает на 5 часов раньше, чем в Израиле).");
