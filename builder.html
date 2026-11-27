@@ -131,6 +131,7 @@ legend { font-size:.85rem; font-weight:600; padding:0 6px; }
 .tour-row button.danger { border-color: var(--err); color: var(--err); background: transparent; }
 .db-st { flex-basis: 100%; }
 .db-st a { color: var(--accent); word-break: break-all; }
+.fixdate { min-height: 32px; padding: 4px 10px; margin-left: 6px; font-size: .85rem; }
 .act-err { flex-basis: 100%; background: var(--warn-bg); color: var(--warn); border-radius: 8px; padding: 8px 10px; font-size: .9rem; }
 .sticky { position: sticky; bottom: 0; background: var(--bg); padding: 12px 0; border-top: 1px solid var(--line); }
 </style>
@@ -182,6 +183,7 @@ legend { font-size:.85rem; font-weight:600; padding:0 6px; }
         <label>Окончание<input id="f-end" type="date"></label>
         <div class="days-n" id="f-days"></div>
       </div>
+      <div id="trip-datewarn"></div>
       <fieldset><legend>Гид</legend><div class="grid">
         <label>Имя<input id="f-guide"></label>
         <label>Телефон (с кодом страны)<input id="f-guide-phone" placeholder="+972 50-000-0000"></label>
@@ -808,8 +810,11 @@ function legTz(dir, i) {
   return [dep, arr];
 }
 const WARN = { out: [], back: [] };
+// Дата рейса не совпадает с датами тура: { out: дата вылета туда, back: дата прилёта домой } — для кнопки «поправить»
+const DATEFIX = { out: null, back: null };
 function computeDir(dir) {
   const legs = LEGS[dir], n = legs.length, start = val("f-start"), end = tripEnd(), warn = [];
+  DATEFIX[dir] = null;
   legs.forEach((l, i) => {
     [l._dtz, l._atz] = legTz(dir, i);
     // Дата: первый сегмент туда — начало тура; следующие — в день прилёта предыдущего (или на следующий, если по часам раньше)
@@ -834,8 +839,10 @@ function computeDir(dir) {
     const lastArr = addDays(legs[n - 1].date, legs[n - 1].next ? 1 : 0);
     if (!legs[0].dateManual && lastArr !== end) { const shift = daysBetween(lastArr, end) - 1; legs.forEach(l => { if (!l.dateManual) l.date = addDays(l.date, shift); }); }
     const finalArr = addDays(legs[n - 1].date, legs[n - 1].next ? 1 : 0);
-    if (finalArr !== end) warn.push(`Прилёт домой ${fmtDate(finalArr)}, а тур заканчивается ${fmtDate(end)} — проверьте даты.`);
+    if (finalArr !== end) DATEFIX.back = finalArr;    // предупреждение с кнопкой — ниже, в dateFixHtml
   }
+  // Туда: дату первого рейса поменяли руками, а «Начало» тура осталось прежним
+  if (dir === "out" && n && start && legs[0].dateManual && legs[0].date && legs[0].date !== start) DATEFIX.out = legs[0].date;
   // Пересадки
   legs.forEach((l, i) => {
     l._lay = null; if (!i) return;
@@ -923,8 +930,28 @@ function refreshLegs(dir) {
                const where = legs[i - 1].to ? cityForms(legs[i - 1].to)[0] : "";
                lay.textContent = `🕓 пересадка ${where}${l._lay == null ? "" : " · " + (l._lay < 0 ? "вылет раньше прилёта!" : fmtDur(l._lay))}`; }
   });
-  $("legwarn-" + dir).innerHTML = WARN[dir].map(w => `<div class="check warn">${esc(w)}</div>`).join("");
+  $("legwarn-" + dir).innerHTML = dateFixHtml(dir) + WARN[dir].map(w => `<div class="check warn">${esc(w)}</div>`).join("");
+  $("trip-datewarn").innerHTML = dateFixHtml("out") + dateFixHtml("back");   // то же — в шаге «Поездка»
 }
+// Даты рейсов и даты тура разошлись: показываем в обоих шагах и даём поправить одним нажатием.
+// Не правим молча: бывают ночные вылеты (00:30 четвёртого при начале тура третьего) — решает человек.
+function dateFixHtml(dir) {
+  const d = DATEFIX[dir]; if (!d) return "";
+  const txt = dir === "out"
+    ? `Вылет ${fmtDate(d)}, а тур начинается ${fmtDate(val("f-start"))}.`
+    : `Прилёт домой ${fmtDate(d)}, а тур заканчивается ${fmtDate(tripEnd())}.`;
+  return `<div class="check warn">⚠ ${esc(txt)} <button type="button" class="ghost fixdate" data-fix="${dir}" data-date="${d}">Сделать ${dir === "out" ? "началом" : "окончанием"} тура ${esc(fmtDate(d).replace(/^\S+\s/, ""))}</button></div>`;
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest(".fixdate"); if (!b) return;
+  const id = b.dataset.fix === "out" ? "f-start" : "f-end";
+  $(id).value = b.dataset.date; TYPED.add(id);
+  if (id === "f-end") autoEnd = "";                  // окончание задано осознанно — больше не подстраиваем
+  // Даты снова совпадают — пусть рейсы опять следуют за датами тура (сдвинете начало — сдвинется и вылет)
+  (b.dataset.fix === "out" ? LEGS.out.slice(0, 1) : LEGS.back).forEach(l => { l.dateManual = false; });
+  $(id).dispatchEvent(new Event("change", { bubbles: true }));
+  saveSoon();
+});
 document.addEventListener("input", e => {
   const box = e.target.closest(".leg[data-dir]"); if (!box) return;   // только сегменты рейсов, не отели
   const dir = box.dataset.dir, l = LEGS[dir][+box.dataset.n], k = e.target.dataset.l;
@@ -1090,7 +1117,10 @@ const pluralRu = (n, one, few, many) => { const m10 = n % 10, m100 = n % 100; re
 let autoEnd = "";   // последнее окончание, которое подставил сам конструктор
 function fillEnd() {
   const cur = val("f-end");
-  if ((!cur || cur === autoEnd) && val("f-start") && programDays()) { autoEnd = addDays(val("f-start"), programDays() - 1); $("f-end").value = autoEnd; }
+  if ((!cur || cur === autoEnd) && val("f-start") && programDays()) {
+    autoEnd = addDays(val("f-start"), programDays() - 1);
+    if (autoEnd !== cur) { $("f-end").value = autoEnd; renderLegs("back"); }   // окончание сдвинулось — обратный рейс тоже
+  }
   const s = val("f-start"), e = val("f-end");
   $("f-days").textContent = s && e && e >= s ? `· ${daysBetween(s, e)} ${pluralRu(daysBetween(s, e), "день", "дня", "дней")}` : "";
 }
@@ -1119,12 +1149,16 @@ function updateStatus() {
   const s = val("f-start"), e = tripEnd();
   if (!s) setStatus("trip", "warn", "нет даты начала");
   else if (e < s) setStatus("trip", "warn", "окончание раньше начала");
+  else if (DATEFIX.out) setStatus("trip", "warn", "начало не совпадает с вылетом");
+  else if (DATEFIX.back) setStatus("trip", "warn", "окончание не совпадает с прилётом домой");
   else if (daysBetween(s, e) !== programDays()) setStatus("trip", "warn", `по датам ${daysBetween(s, e)} дн., в программе ${programDays()}`);
   else setStatus("trip", "ok", `${fmtDate(s).replace(/^\S+\s/, "")} – ${fmtDate(e).replace(/^\S+\s/, "")}`);
   // Рейсы
   const has = dir => LEGS[dir].some(l => l.dep);
   const nums = [...LEGS.out, ...LEGS.back].some(l => /\d/.test(l.no || ""));
   if (!has("out") || !has("back")) setStatus("flights", "warn", `нет времени вылета ${!has("out") ? "туда" : "обратно"}`);
+  else if (DATEFIX.out) setStatus("flights", "warn", "вылет не в день начала тура");
+  else if (DATEFIX.back) setStatus("flights", "warn", "прилёт домой не в последний день тура");
   else if (WARN.out.length || WARN.back.length) setStatus("flights", "warn", (WARN.back[0] || WARN.out[0]).replace(/ — .*$/, "").slice(0, 60));
   else setStatus("flights", "ok", nums ? "с номерами рейсов" : "предварительно, без номеров");
   // Отели
