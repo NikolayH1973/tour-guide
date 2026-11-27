@@ -138,11 +138,18 @@ function dayItems(day) {
 /* ===== Опции (экскурсии за доплату) =====
    Каждая — раскрывающаяся карточка: заголовок и «зацепка» гида видны сразу, полный текст — по нажатию.
    Кнопка «Записаться» открывает WhatsApp гида с готовым текстом (wa.me умеет принимать ?text=). */
-// Цена: взрослый / ребёнок до 16 лет, в фунтах. Короткая форма — для «пилюли» в программе, длинная — в карточке.
-const optPrice = o => o.price ? `${tx("k26", TOUR.currency.symbol, o.price.adult, TOUR.currency.symbol, o.price.child)}` : null;
-const optPriceLong = o => o.price ? `${tx("k27", TOUR.currency.symbol, o.price.adult, TOUR.currency.symbol, o.price.child, TOUR.currency.childAge)}` : tx("k28");
+// Цена: взрослый / ребёнок. Валюта опций своя (чаще $ или €), иначе — местная.
+// Детской цены может не быть — тогда одна цена «с человека».
+// Короткая форма — для «пилюли» в программе, длинная — в карточке.
+const optSym = () => TOUR.optCurrency || TOUR.currency.symbol;
+const hasChild = o => o.price && o.price.child != null && o.price.child !== o.price.adult;
+const optPrice = o => !o.price ? null : hasChild(o)
+  ? tx("k26", optSym(), o.price.adult, optSym(), o.price.child) : tx("optOne", optSym(), o.price.adult);
+const optPriceLong = o => !o.price ? tx("k28") : hasChild(o)
+  ? tx("k27", optSym(), o.price.adult, optSym(), o.price.child, TOUR.currency.childAge) : tx("optOneLong", optSym(), o.price.adult);
 const optOpen = new Set();   // какие карточки опций раскрыты (чтобы перерисовка программы их не сворачивала)
-const signupBtn = (text, cls) => `<a class="btn ${cls}" href="${TOUR.signupForm}" target="_blank" rel="noopener">${text}</a>`;
+// Запись: если у агентства есть своя форма — ведём туда; если нет — в WhatsApp гида с готовым текстом
+const signupBtn = (text, cls) => TOUR.signupForm ? `<a class="btn ${cls}" href="${TOUR.signupForm}" target="_blank" rel="noopener">${text}</a>` : "";
 
 function optionsHtml() {
   const g = TOUR.guide;
@@ -150,29 +157,32 @@ function optionsHtml() {
   return `<article class="card" id="options">
     <h3>${tx("k36")}</h3>
     <p class="small muted">${tx("k37")}</p>
-    <p class="small">${TOUR.optionsHow || tx("k38")}</p>
+    <p class="small">${TOUR.optionsHow || tx(TOUR.signupForm ? "k38" : g.phone ? "optHowWa" : "optHowGuide")}</p>
     ${signupBtn(tx("k29"), "go-btn")}
-    <p class="small muted">${tx("k39")}</p>
+    ${TOUR.signupForm ? `<p class="small muted">${tx("k39")}</p>` : ""}
     ${TOUR.options.map(o => {
-      const msg = `${tx("k30", g.name.split(" ")[0], o.title, day(o.date))} `;
+      const first = (g.name || "").split(" ")[0];
+      const msg = `${tx("k30", first, o.title, day(o.date))} `;
+      const join = tx("optJoinMsg", first, o.title, day(o.date));
       return `<details class="opt-card" id="opt-${o.id}" ${optOpen.has(o.id) ? "open" : ""}>
         <summary>
           <span class="eyebrow">${day(o.date)}</span>
           <b class="opt-t">${esc(o.title)}</b>
-          <span class="small muted">${esc(o.hook)}</span>
+          ${o.hook ? `<span class="small muted">${esc(o.hook)}</span>` : ""}
           ${optPrice(o) ? `<span class="small"><b>${esc(optPrice(o))}</b></span>` : ""}
         </summary>
         ${[].concat(o.text).map(t => `<p>${esc(t)}</p>`).join("")}
         <div class="place-meta">
-          <span>💷 ${esc(optPriceLong(o))}</span>
+          <span>💰 ${esc(optPriceLong(o))}</span>
           ${o.includes ? `<span>${tx("k31", esc(o.includes))}</span>` : ""}
         </div>
         ${(o.spots || [["", o.q]]).map(([label, q]) => `<div class="btn-row">
           <a class="btn ghost" href="https://www.google.com/search?tbm=isch&q=${encodeURIComponent(q)}" target="_blank" rel="noopener">${tx("k33", label ? " · " + esc(label) : "")}</a>
           <a class="btn ghost" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}" target="_blank" rel="noopener">📍 ${label ? esc(label) : tx("k32")}</a>
         </div>`).join("")}
-        ${signupBtn(tx("k34"), "go-btn")}
-        <a class="btn ghost" href="${waHref(g.phone)}?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">${tx("k35")}</a>
+        ${TOUR.signupForm ? signupBtn(tx("k34"), "go-btn")
+          : g.phone ? `<a class="btn go-btn" href="${waHref(g.phone)}?text=${encodeURIComponent(join)}" target="_blank" rel="noopener">${tx("optJoinWa")}</a>` : ""}
+        ${g.phone ? `<a class="btn ghost" href="${waHref(g.phone)}?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">${tx("k35")}</a>` : ""}
       </details>`;
     }).join("")}
   </article>`;

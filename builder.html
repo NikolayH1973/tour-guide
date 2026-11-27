@@ -132,6 +132,8 @@ legend { font-size:.85rem; font-weight:600; padding:0 6px; }
 .db-st { flex-basis: 100%; }
 .db-st a { color: var(--accent); word-break: break-all; }
 .fixdate { min-height: 32px; padding: 4px 10px; margin-left: 6px; font-size: .85rem; }
+.opt-ed { border: 1px solid var(--line); border-left: 4px solid var(--opt); border-radius: 10px; padding: 10px 12px; margin-top: 10px; background: #fff; }
+.opt-ed-h { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
 .act-err { flex-basis: 100%; background: var(--warn-bg); color: var(--warn); border-radius: 8px; padding: 8px 10px; font-size: .9rem; }
 .sticky { position: sticky; bottom: 0; background: var(--bg); padding: 12px 0; border-top: 1px solid var(--line); }
 </style>
@@ -243,8 +245,22 @@ legend { font-size:.85rem; font-weight:600; padding:0 6px; }
     </div>
   </section>
 
+  <section class="card step" id="step-opts" hidden>
+    <button type="button" class="step-h" aria-expanded="true"><span class="step-n">7</span><span class="step-t">Опции за доплату</span><span class="step-s" id="st-opts"></span><span class="chev" aria-hidden="true">⌄</span></button>
+    <div class="step-b">
+      <p class="muted">Здесь — все пункты, отмеченные 🪙 в программе по дням. Туристы увидят карточку опции: название, цена, описание, фото и место на карте, кнопка записи у гида.</p>
+      <div class="grid">
+        <label>Цены опций в<select id="f-opt-cur">
+          <option value="$">$ — доллары</option><option value="€">€ — евро</option><option value="local">местная валюта</option><option value="₪">₪ — шекели</option>
+        </select></label>
+        <label>Детская цена — до (лет)<input id="f-child-age" type="number" min="1" max="18" placeholder="12"></label>
+      </div>
+      <div id="opts"></div>
+    </div>
+  </section>
+
   <section class="card step" id="step-extra" hidden>
-    <button type="button" class="step-h" aria-expanded="true"><span class="step-n">7</span><span class="step-t">Условия тура</span><span class="step-s" id="st-extra"></span><span class="chev" aria-hidden="true">⌄</span></button>
+    <button type="button" class="step-h" aria-expanded="true"><span class="step-n">8</span><span class="step-t">Условия тура</span><span class="step-s" id="st-extra"></span><span class="chev" aria-hidden="true">⌄</span></button>
     <div class="step-b">
       <p class="muted">Найдено в тексте. Пока сохраняется в trip.json для будущего экрана «Условия тура».</p>
       <div class="grid">
@@ -395,7 +411,52 @@ function renderDays() {
       <button type="button" class="ghost" data-add-it="${i}" style="margin-top:6px">+ пункт</button>
     </div>`;
   }).join("");
+  renderOpts();
 }
+
+/* =========================================================
+   ОПЦИИ ЗА ДОПЛАТУ: описание и цена каждой опции.
+   Данные лежат прямо в пункте дня (it.o = { title, adult, child, hook, text, includes, q }):
+   перетащили пункт или день — описание едет вместе с ним; сняли 🪙 — опция исчезает,
+   а описание остаётся в пункте и вернётся, если 🪙 включить снова.
+   ========================================================= */
+// «Шоу водяных кукол (за дополнительную плату).» → «Шоу водяных кукол»
+const optTitle = t => t.replace(/\s*\((?:за\s+)?(?:дополнительную\s+плату|доплату)[^)]*\)/i, "").replace(/[.\s]+$/, "").trim();
+function optList() {
+  const out = [];
+  (parsed ? parsed.days : []).forEach((d, di) => d.items.forEach((it, k) => { if (it.opt) out.push({ d, di, it, k }); }));
+  return out;
+}
+function renderOpts() {
+  const list = optList(), cur = optCurSymbol();
+  $("opts").innerHTML = !list.length
+    ? `<p class="muted">Опций пока нет. Отметьте пункт значком 🪙 в шаге «Программа по дням» — он появится здесь.</p>`
+    : list.map(({ d, di, it, k }) => {
+        const o = it.o || {}, date = dayDate(d);
+        return `<div class="opt-ed" data-oi="${di}:${k}">
+          <div class="opt-ed-h"><span class="day-n">${d.from}</span><span class="day-d">${date ? fmtDate(date) : ""}</span><span class="muted">${esc(it.t)}</span></div>
+          <label>Название для туристов<input data-of="title" value="${esc(o.title != null ? o.title : optTitle(it.t))}"></label>
+          <div class="grid">
+            <label>Цена, взрослый (${esc(cur)})<input data-of="adult" type="number" min="0" step="any" value="${esc(o.adult != null ? o.adult : "")}" placeholder="45"></label>
+            <label>Цена, ребёнок (${esc(cur)}) — если отличается<input data-of="child" type="number" min="0" step="any" value="${esc(o.child != null ? o.child : "")}" placeholder="не обязательно"></label>
+          </div>
+          <label>Коротко — одна фраза, чтобы захотелось<input data-of="hook" value="${esc(o.hook || "")}" placeholder="Вечер, который запомнится всей семье"></label>
+          <label>Подробное описание — абзацы через пустую строку<textarea data-of="text" rows="4">${esc(o.text || "")}</textarea></label>
+          <div class="grid">
+            <label>Что включено в цену<input data-of="includes" value="${esc(o.includes || "")}" placeholder="билеты и трансфер"></label>
+            <label>Для фото и карты — как искать<input data-of="q" value="${esc(o.q || "")}" placeholder="${esc(optTitle(it.t) + (val("f-city") ? ", " + val("f-city") : ""))}"></label>
+          </div>
+        </div>`;
+      }).join("");
+}
+const optCurSymbol = () => val("f-opt-cur") === "local" ? (val("f-cur") || "местн.") : (val("f-opt-cur") || "$");
+document.addEventListener("input", e => {
+  const box = e.target.closest(".opt-ed"); if (!box || !e.target.dataset.of) return;
+  const [di, k] = box.dataset.oi.split(":").map(Number), it = parsed.days[di].items[k];
+  it.o = it.o || {};
+  it.o[e.target.dataset.of] = e.target.value;
+});
+$("f-opt-cur").addEventListener("change", renderOpts);
 // Значки обновляем на лету (рейсы, отели, сбор поменялись), не трогая поля ввода
 function refreshDayTags() {
   if (!parsed) return;
@@ -1061,23 +1122,42 @@ function buildTrip() {
   }
 
   // Дни: «ДНИ 2–3» превращаются в два дня с одним названием
-  T.days = [];
+  T.days = []; T.options = [];
+  const num = v => (v === "" || v == null || isNaN(+v) ? null : +v);
   parsed.days.forEach(d => {
     for (let n = d.from; n <= d.to; n++) {
       normItems(d);
+      const date = addDays(start, n - 1);
       const items = n === d.from ? d.items.filter(it => it.t.trim()) : [{ t: `Продолжение программы: ${d.title}`, opt: false }];
       T.days.push({
-        date: addDays(start, n - 1), title: d.title || `День ${n}`,
+        date, title: d.title || `День ${n}`,
         meeting: d.time || d.place ? { time: d.time || null, place: d.place || "" } : { time: null, wa: "время и место" },
-        items: items.map(it => it.opt ? { t: it.t.trim(), opt: true } : { t: it.t.trim() })
+        items: items.map(it => {
+          if (!it.opt) return { t: it.t.trim() };
+          // Опция: пункт дня ссылается на карточку по id (в приложении строка ведёт в описание)
+          const o = it.o || {}, id = `o${T.options.length + 1}`, title = (o.title != null ? o.title : optTitle(it.t)).trim() || optTitle(it.t);
+          const adult = num(o.adult), child = num(o.child);
+          T.options.push({
+            id, title, date,
+            price: adult != null ? (child != null && child !== adult ? { adult, child } : { adult }) : null,
+            hook: (o.hook || "").trim(),
+            text: (o.text || "").split(/\n\s*\n/).map(s => s.trim()).filter(Boolean),
+            includes: (o.includes || "").trim(),
+            q: (o.q || "").trim() || title + (val("f-city") ? ", " + val("f-city") : "")
+          });
+          // «(за дополнительную плату)» из текста убираем: в приложении рядом и так метка «за доплату · $15»
+          return { t: it.t.replace(/\s*\((?:за\s+)?(?:дополнительную\s+плату|доплату)[^)]*\)/i, "").trim(), opt: id };
+        })
       });
     }
   });
+  // Валюта цен опций: чаще всего $ или €, не обязательно местная
+  T.optCurrency = optCurSymbol();
+  T.currency = { ...T.currency, childAge: +val("f-child-age") || T.currency.childAge || 12 };
   // Место сбора в аэропорту: у каждого агентства своё
   if (val("f-airport")) T.airport.name = val("f-airport");
   if (val("f-airport-h")) T.airport.hoursBefore = +val("f-airport-h");
   T.warnings = $("f-notes").value.split("\n").map(s => s.trim()).filter(Boolean);
-  T.options = [];       // карточки опций с ценами — следующий шаг конструктора
   T.included = $("f-included").value.split("\n").map(s => s.trim()).filter(Boolean);
   T.notIncluded = $("f-notincluded").value.split("\n").map(s => s.trim()).filter(Boolean);
   return T;
@@ -1173,6 +1253,11 @@ function updateStatus() {
   // Дни
   const empty = parsed.days.filter(d => !d.items.some(it => (it.t || it).trim())).length;
   setStatus("days", errs.length || empty ? "warn" : "ok", errs.length ? "пропуски или повторы" : empty ? `${empty} ${pluralRu(empty, "день", "дня", "дней")} без описания` : "всё на месте");
+  // Опции
+  const ol = optList(), noPrice = ol.filter(x => !(x.it.o && x.it.o.adult !== "" && x.it.o.adult != null)).length;
+  if (!ol.length) setStatus("opts", "later", "нет опций");
+  else if (noPrice) setStatus("opts", "warn", `${noPrice} без цены — туристы увидят «цену уточнит гид»`);
+  else setStatus("opts", "ok", `${ol.length} ${pluralRu(ol.length, "опция", "опции", "опций")}`);
   // Условия
   const inc = $("f-included").value.trim(), ninc = $("f-notincluded").value.trim();
   setStatus("extra", inc || ninc ? "ok" : "later", inc || ninc ? "заполнено" : "необязательно");
@@ -1305,6 +1390,21 @@ $("example").addEventListener("click", () => {
   $("parse").click();
   HOTELS.splice(0, HOTELS.length, ...EXAMPLE_HOTELS.map(h => ({ ...h })));
   renderHotels();
+  // Описания опций примера — наши, выдуманные (не тексты агентств)
+  const EX_OPTS = [
+    [/кукол/i, { title: "Театр водяных кукол", adult: 15, child: 10, hook: "Восьмисотлетняя традиция — сцена прямо на воде",
+      text: "Куклы скользят по воде, оркестр играет на старинных инструментах, а актёры прячутся за бамбуковой ширмой по пояс в воде. Спектакль длится около часа и понятен без слов — дети смотрят, не отрываясь.\n\nПосле представления можно пройти за кулисы и рассмотреть кукол поближе.",
+      includes: "билеты в театр и трансфер", q: "Thang Long water puppet theatre Hanoi" }],
+    [/кухни/i, { title: "Мастер-класс вьетнамской кухни", adult: 45, hook: "Рынок, кухня и обед, который вы приготовили сами",
+      text: "Утром вместе с поваром идём на местный рынок за травами и специями, затем на кухне учимся готовить нэм, суп фо и салат из зелёной папайи.\n\nВ конце — общий обед и рецепты на память.",
+      includes: "продукты, фартук, обед и рецепты", q: "Hoi An cooking class" }],
+    [/Кути/i, { title: "Туннели Кути", adult: 35, child: 25, hook: "Подземный город длиной больше 200 километров",
+      text: "Сеть подземных ходов, кухонь и укрытий, где годами жили люди. Желающие могут пройти по специально расширенному участку туннеля — и понять, насколько там тесно.\n\nПоездка занимает полдня, обувь лучше удобную.",
+      includes: "трансфер, входные билеты и местный гид", q: "Cu Chi tunnels" }]
+  ];
+  parsed.days.forEach(d => d.items.forEach(it => { if (!it.opt) return; const m = EX_OPTS.find(([re]) => re.test(it.t)); if (m) it.o = { ...m[1] }; }));
+  $("f-opt-cur").value = "$"; $("f-child-age").value = "12";
+  renderOpts();
   $("f-title").value = "Вьетнам: от Ханоя до Сайгона"; $("f-agency").value = "Пример-Тур";
   if (!val("f-rate")) $("f-rate").value = "7000";
   $("f-airport").value = "Бен-Гурион, терминал 3, у стойки агентства";
