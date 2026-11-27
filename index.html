@@ -384,6 +384,28 @@ details.guide[open] summary { margin-bottom: 8px; }
 .opt-card[open] summary .opt-t::after { content: "\00a0▴"; }
 .opt-card[open] > :not(summary) { margin-top: 10px; }
 a.pill.opt { text-decoration: none; white-space: nowrap; }
+/* Маршрут перелёта */
+details.route > summary { list-style: none; cursor: pointer; display: flex; flex-direction: column; gap: 4px; min-height: 44px; }
+details.route > summary::-webkit-details-marker { display: none; }
+.rt-h { font-weight: 700; font-size: 1.05rem; }
+.rt-h::after { content: "\00a0▾"; color: var(--muted); font-weight: 400; }
+details.route[open] .rt-h::after { content: "\00a0▴"; }
+.rt-dir { font-weight: 400; font-size: .9rem; }
+.rt-sum { font-size: .92rem; }
+details.route.out { border-left: 4px solid #2f6fd6; } details.route.back { border-left: 4px solid #2e8b57; }
+.rt-chip { display: inline-block; align-self: flex-start; font-size: .78rem; padding: 2px 8px; border-radius: 999px; background: var(--bg); color: var(--muted); }
+.rt-chip.ok { background: #e8f3ec; color: #1e6b40; } .rt-chip.late { background: #fff1dc; color: #a35a00; } .rt-chip.bad { background: #fde4e4; color: #a11; }
+.rt-line { list-style: none; margin: 12px 0 0; padding: 0 0 0 18px; position: relative; }
+.rt-line::before { content: ""; position: absolute; left: 5px; top: 10px; bottom: 10px; width: 2px; background: var(--line); }
+.rt-pt { position: relative; display: flex; gap: 12px; align-items: baseline; padding: 4px 0; }
+.rt-pt::before { content: ""; position: absolute; left: -18px; top: 9px; width: 10px; height: 10px; border-radius: 50%; background: var(--surface); border: 2px solid var(--ink); box-sizing: border-box; }
+.rt-time { font-size: 1.3rem; font-weight: 700; min-width: 58px; font-variant-numeric: tabular-nums; }
+.rt-city { display: flex; flex-direction: column; }
+.rt-seg { padding: 2px 0 6px 70px; }
+.rt-seg .flight-rows { margin-top: 6px; }
+.rt-lay { margin: 6px 0 6px 0; padding: 6px 10px; border-radius: 10px; background: var(--bg); font-size: .85rem; color: var(--muted); }
+.rt-lay.warn { background: #fff1dc; color: #a35a00; }
+.rt-final { font-weight: 700; margin: 10px 0 0; }
 .flight-st { font-size: 1.2rem; font-weight: 700; margin: 0; }
 .flight-rows { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; padding: 10px 12px; border-radius: 12px; background: var(--bg); }
 .steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }

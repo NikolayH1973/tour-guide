@@ -334,6 +334,104 @@ function flightCard(f) {
   </article>`;
 }
 
+/* ===== Маршрут перелёта: раскрывающийся блок =====
+   Свёрнуто — одна строка «22:45 → 16:20 (+1) · пересадка: Дубай · ~19 ч» (задержка видна и тут).
+   Раскрыто — линия сверху вниз: вылеты и прилёты по местному времени, пересадки плашкой,
+   статус у сегмента (только если есть номер рейса), «В Израиле в этот момент: …». */
+// Местное время «2027-03-04 16:20» в поясе tz → момент времени (мс). Сдвиг пояса узнаём через Intl.
+function zonedMs(date, hm, tz) {
+  const guess = Date.parse(`${date}T${hm}:00Z`);
+  const p = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: tz, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })
+    .formatToParts(new Date(guess)).map(x => [x.type, x.value]));
+  const shown = Date.parse(`${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}:00Z`);
+  return guess - (shown - guess);
+}
+const hmIn = (ms, tz) => new Intl.DateTimeFormat("ru-RU", { timeZone: tz, hour: "2-digit", minute: "2-digit" }).format(new Date(ms));
+const dateIn = (ms, tz) => new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date(ms));   // YYYY-MM-DD
+const durText = min => { const h = Math.floor(min / 60), m = Math.round(min % 60); return h && m ? tx("rtHM", h, m) : h ? tx("rtH", h) : tx("rtM", m); };
+// Сегменты с вычисленными моментами вылета и прилёта
+function routeLegs(kind) {
+  const dir = TOUR.flights[kind], legs = legsOf(dir);
+  return legs.map((l, i) => {
+    const last = i === legs.length - 1;
+    const depMs = l.at ? Date.parse(l.at) : null, depDate = l.at ? l.at.slice(0, 10) : (kind === "out" ? TOUR.start : TOUR.end);
+    const depTz = l.tz || (kind === "out" ? TOUR.home.tz : TOUR.tz);
+    const arrTz = l.arrTz || (last ? (kind === "out" ? TOUR.tz : TOUR.home.tz) : "");
+    const arrHM = (l.arr || "").replace(/\s*\(\+\d\)\s*$/, ""), plus = /\(\+1\)/.test(l.arr || "") ? 1 : 0;
+    let arrMs = null;
+    if (depMs && l.durMin) arrMs = depMs + l.durMin * 6e4;
+    else if (arrTz && arrHM) { const dd = new Date(Date.parse(depDate + "T12:00:00Z") + plus * 864e5).toISOString().slice(0, 10); arrMs = zonedMs(dd, arrHM, arrTz); }
+    const arrDate = arrMs && arrTz ? dateIn(arrMs, arrTz) : null;
+    return { ...l, depTz, arrTz, arrHM, depMs, arrMs, depDate, arrDate };
+  });
+}
+// Короткий статус сегмента: только при номере рейса
+function legStatus(l, allPrelim) {
+  if (!/\d/.test(l.no || "")) return allPrelim ? "" : `<span class="rt-chip prelim">${tx("rtPrelim")}</span>`;   // весь перелёт предварительный — пометка одна, в заголовке
+  const win = flightWindow(l), d = FL[l.no] && FL[l.no].data;
+  if (win === "early") return "";
+  if (win === "over") return "";
+  if (!d || d.state !== "ok") return `<span class="rt-chip">${d ? tx("rtNoData") : tx("k70")}</span>`;
+  const dep = d.dep || {}, bad = ["cancelled", "diverted", "incident"].includes(d.status);
+  const late = d.status === "scheduled" && (dep.delay || 0) >= 15;
+  return `<span class="rt-chip ${bad ? "bad" : late ? "late" : "ok"}">${{ scheduled: late ? "🟠 " + tx("k55", dep.delay) : "🟢 " + tx("k56"), active: "✈️ " + tx("k57"), landed: "✅ " + tx("k58"), cancelled: "🔴 " + tx("k59"), diverted: "🔴 " + tx("k60"), incident: "🔴 " + tx("k61") }[d.status] || "⚪ " + tx("k62")}</span>`;
+}
+// Есть ли тревожный статус (задержка/отмена) — показать и в свёрнутом виде
+function routeAlert(legs) {
+  for (const l of legs) {
+    const d = /\d/.test(l.no || "") && flightWindow(l) === "live" && FL[l.no] && FL[l.no].data;
+    if (!d || d.state !== "ok") continue;
+    if (["cancelled", "diverted", "incident"].includes(d.status)) return `<span class="rt-chip bad">🔴 ${esc(l.no)}: ${tx(d.status === "cancelled" ? "k59" : d.status === "diverted" ? "k60" : "k61")}</span>`;
+    if (d.status === "scheduled" && (d.dep || {}).delay >= 15) return `<span class="rt-chip late">🟠 ${esc(l.no)}: ${tx("k55", d.dep.delay)}</span>`;
+  }
+  return "";
+}
+function flightRouteHtml(kind, open) {
+  const legs = routeLegs(kind);
+  if (!legs.length || !legs[0].dep) return "";
+  const first = legs[0], last = legs[legs.length - 1], home = TOUR.home.tz;
+  const total = first.depMs && last.arrMs ? (last.arrMs - first.depMs) / 6e4 : null;
+  const plusDays = last.arrDate ? Math.round((Date.parse(last.arrDate) - Date.parse(first.depDate)) / 864e5) : 0;
+  const arrSum = (last.arrHM || "") + (plusDays > 0 ? ` (+${plusDays})` : "");
+  const via = legs.length > 1 ? tx("rtVia", legs.slice(0, -1).map(l => esc(l.to)).join(", ")) : tx("rtDirect");
+  const prelim = !legs.some(l => /\d/.test(l.no || ""));
+  let tl = "";
+  legs.forEach((l, i) => {
+    const airline = l.no || l.airline || "";                       // номер рейса уже содержит код авиакомпании
+    const live = /\d/.test(l.no || "") && flightWindow(l) === "live" && FL[l.no] && FL[l.no].data && FL[l.no].data.state === "ok";
+    tl += `<li class="rt-pt dep">
+        <span class="rt-time">${esc(l.dep)}</span>
+        <span class="rt-city"><b>${esc(l.from)}</b><span class="small muted">${wday(l.depDate)}, ${fmt(l.depDate)}${l.depTz !== home ? " · " + tx("rtLocal") : ""}</span></span>
+      </li>
+      <li class="rt-seg">
+        <span class="small muted">✈ ${esc(airline || "")}${l.durMin ? " · " + durText(l.durMin) : ""}</span> ${live ? "" : legStatus(l, prelim)}
+        ${live ? flightStatusHtml(FL[l.no].data) : ""}
+        ${/\d/.test(l.no || "") && flightWindow(l) === "early" && i === 0 ? `<p class="small muted">${tx("k69", new Intl.DateTimeFormat("ru-RU", { timeZone: l.depTz, day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }).format(new Date(l.depMs - FL_OPEN)), l.tzName || "")}</p>` : ""}
+      </li>
+      <li class="rt-pt arr">
+        <span class="rt-time">${esc(l.arrHM || "—")}</span>
+        <span class="rt-city"><b>${esc(l.to)}</b><span class="small muted">${l.arrDate ? `${wday(l.arrDate)}, ${fmt(l.arrDate)}` : ""}${l.arrTz && l.arrTz !== home ? " · " + tx("rtLocal") : ""}</span>
+        ${l.arrMs && l.arrTz && l.arrTz !== home ? `<span class="small muted rt-home">${tx("rtHomeNow", cap(TOUR.home.prep), hmIn(l.arrMs, home))}</span>` : ""}</span>
+      </li>`;
+    const nx = legs[i + 1];
+    if (nx && l.arrMs && nx.depMs) {
+      const lay = (nx.depMs - l.arrMs) / 6e4;
+      tl += `<li class="rt-lay${lay < 45 || lay > 24 * 60 ? " warn" : ""}">${tx("rtLay", esc(l.to), durText(lay))}</li>`;
+    }
+  });
+  const homeArr = kind === "back" && last.arrMs ? `<p class="rt-final">${tx("rtHomeArr", hmIn(last.arrMs, home), wday(dateIn(last.arrMs, home)), fmt(dateIn(last.arrMs, home)))}</p>` : "";
+  return `<details class="card route ${kind}"${open ? " open" : ""}>
+    <summary>
+      <span class="rt-h">${kind === "out" ? tx("rtOut") : tx("rtBack")} <span class="muted rt-dir">${esc(first.from)} → ${esc(last.to)}</span></span>
+      <span class="rt-sum">${esc(first.dep)} → ${esc(arrSum)} · ${via}${total ? " · " + tx("rtTotal", durText(Math.round(total / 30) * 30)) : ""}</span>
+      ${routeAlert(legs)}${prelim ? `<span class="rt-chip prelim">${tx("rtPrelim")}</span>` : ""}
+    </summary>
+    <ol class="rt-line">${tl}</ol>
+    ${homeArr}
+    ${prelim ? `<p class="small muted">${tx("prelimNote")}</p>` : ""}
+  </details>`;
+}
+
 function renderToday() {
   const real = tripToday();
   const today = preview || real;
@@ -353,16 +451,17 @@ function renderToday() {
         <button type="button" class="nav-btn" ${next ? `data-pv="${next.date}"` : "disabled"} aria-label="${tx("k83")}">→</button>
       </nav>
       <p class="hint">${tx("k90")}</p>
-      ${idx === 0 ? legsOf(TOUR.flights.out).map(flightCard).join("") : idx === TOUR.days.length - 1 ? legsOf(TOUR.flights.back).map(flightCard).join("") : ""}
+      ${FL_TEST !== null ? `<p class="pill todo">${tx("k75", legsOf(TOUR.flights.out)[0].no, FL_TEST || tx("k74"))}</p>` : ""}
+      ${idx === 0 ? `<article class="card airport-card"><h3>${tx("rtAirport")}</h3>${airportHtml()}${airportTip()}</article>${flightRouteHtml("out", true)}` : ""}
+      ${idx === TOUR.days.length - 1 ? flightRouteHtml("back", true) : ""}
       <article class="card now">
         <span class="pill gold">${tx("k91", idx + 1, TOUR.days.length, wday(d.date), fmt(d.date))}</span>
         <h2>${esc(d.title)}</h2>
         ${wxLine(d.date)}
-        ${idx === 0 ? airportHtml() : ""}
-        <div class="meet">
+        ${idx === 0 && !d.meeting.time ? "" : `<div class="meet">
           <span class="time">${d.meeting.time ? esc(d.meeting.time) : tx("k84")}</span>
           ${placeHtml(d.meeting)}
-        </div>
+        </div>`}
         ${dayItems(d)}
         ${d.tip ? `<p class="tip">${esc(d.tip)}</p>` : ""}
       </article>
@@ -382,8 +481,6 @@ function renderToday() {
       <article class="card now">
         <span class="eyebrow">${tx("k101")}</span>
         <div><span class="big-num">${n}</span> <span class="muted">${plural(n,tx("k93"),tx("k94"),tx("k95"))}</span></div>
-        <p>${f.via ? tx("k102via", f.no, f.from, f.dep, f.to, f.arr, wday(TOUR.start), fmt(TOUR.start), f.via) : tx("k102", f.no, f.from, f.dep, f.to, f.arr, wday(TOUR.start), fmt(TOUR.start))}</p>
-        ${flightsPrelim() ? `<p class="small muted">${tx("prelimNote")}</p>` : ""}
         ${WX && WX.days && WX.days[TOUR.start] ? `<div><span class="small muted">${tx("k96", TOUR.city.prep)}</span>${wxLine(TOUR.start)}</div>` : `<p class="small muted">${TOUR.weatherTease ? esc(TOUR.weatherTease) + " " : ""}${tx("k97")}</p>`}
       </article>
       <article class="card">
@@ -392,7 +489,7 @@ function renderToday() {
         ${airportTip()}
       </article>
       ${(TOUR.warnings || []).length ? `<article class="card"><h3>${tx("warnTitle")}</h3><ul class="items">${TOUR.warnings.map(w => `<li><span>${esc(w)}</span></li>`).join("")}</ul></article>` : ""}
-      ${legsOf(TOUR.flights.out).map(flightCard).join("")}
+      ${flightRouteHtml("out", false)}
       <article class="card">
         <h3>${tx("k105", cnt, list.length)}</h3>
         <div class="progress"><i style="width:${Math.round(cnt / list.length * 100)}%"></i></div>
@@ -407,7 +504,9 @@ function renderToday() {
   } else {
     html += `<article class="card"><h2>${tx("k108")}</h2><p>${tx("k109", TOUR.city.name)}</p></article>`;
   }
+  const openRt = [...document.querySelectorAll("#v-today details.route")].map(x => [x.classList.contains("out") ? "out" : "back", x.open]);
   $("#v-today").innerHTML = html;
+  openRt.forEach(([k, o]) => { const el = $("#v-today details.route." + k); if (el) el.open = o; });
   // Длинный тур: прокручиваем полосу дней так, чтобы текущий день был по центру
   const cur = $("#v-today .dot-btn[aria-current]");
   if (cur) { const bar = cur.parentElement; bar.scrollLeft = cur.offsetLeft - bar.offsetLeft - (bar.clientWidth - cur.offsetWidth) / 2; }
@@ -426,6 +525,7 @@ function renderProgram() {
         ${dayItems(d)}
         ${i === 0 ? `<p class="small muted">${tx("k113", TOUR.home.prep, airportTime() + (flightsPrelim() ? ` (${tx("prelimShort")})` : ""), esc(TOUR.airport.name), TOUR.airport.short ? ", " + esc(TOUR.airport.short) : "")}</p>` : ""}
         <p class="small muted">${i === 0 ? tx("k114", cap(TOUR.city.prep)) : tx("k84")}: ${d.meeting.time ? esc(d.meeting.time) + " · " : ""}${d.meeting.wa ? esc(waText(d.meeting).replace(tx("k86"), tx("k87"))) : esc(d.meeting.place)}</p>
+        ${i === 0 ? flightRouteHtml("out", false) : i === TOUR.days.length - 1 ? flightRouteHtml("back", false) : ""}
         <button type="button" class="btn ghost" data-pv-go="${d.date}">${tx("k116")}</button>
       </article>`).join("")}
     ${TOUR.options.length ? optionsHtml() : ""}
