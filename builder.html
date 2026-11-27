@@ -1009,7 +1009,8 @@ function buildTrip() {
       // номер рейса — только настоящий (буквы + цифры); код авиакомпании без номера статус не даст
       const date = l.date || defDate, tz = l._dtz || (dir === "out" ? home : tz0);
       const no = l.no.trim().toUpperCase().replace(/\s+/g, "");
-      return { no: /\d/.test(no) ? no : "", airline: (l.airline || "").trim().toUpperCase() || no.replace(/\d.*/, ""), from: l.from.trim(), to: l.to.trim(), dep: l.dep, arr: l.arr + (l.next ? " (+1)" : ""),
+      const code = (l.airline || "").trim().toUpperCase() || no.replace(/\d.*/, "");
+      return { no: /\d/.test(no) ? no : "", airline: code, airlineName: airlineName(code), from: l.from.trim(), to: l.to.trim(), dep: l.dep, arr: l.arr + (l.next ? " (+1)" : ""),
                date, at: l.dep ? `${date}T${l.dep}:00${tzOffset(tz, date)}` : null, tz, tzName: tzName(tz),
                arrTz: l._atz || "", durMin: l._dur > 0 ? Math.round(l._dur / 6e4) : null };
     });

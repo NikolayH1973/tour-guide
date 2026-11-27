@@ -398,7 +398,9 @@ function flightRouteHtml(kind, open) {
   const prelim = !legs.some(l => /\d/.test(l.no || ""));
   let tl = "";
   legs.forEach((l, i) => {
-    const airline = l.no || l.airline || "";                       // номер рейса уже содержит код авиакомпании
+    // «Emirates · EK932»: название понятнее туристу, номер нужен для табло в аэропорту.
+    // Название записывает конструктор (поле airlineName); в старых турах его нет — тогда как раньше, код.
+    const airline = [l.airlineName, l.no || (!l.airlineName && l.airline) || ""].filter(Boolean).join(" · ");
     const live = /\d/.test(l.no || "") && flightWindow(l) === "live" && FL[l.no] && FL[l.no].data && FL[l.no].data.state === "ok";
     tl += `<li class="rt-pt dep">
         <span class="rt-time">${esc(l.dep)}</span>
