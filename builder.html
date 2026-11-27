@@ -90,6 +90,31 @@ legend { font-size:.85rem; font-weight:600; padding:0 6px; }
 .lay.bad { color: var(--warn); font-weight: 600; }
 .leg-warn { margin-top: 8px; }
 @media (max-width: 560px) { .seg-g2 { grid-template-columns: 1fr 1fr; } }
+/* Программа по дням */
+.day-row { all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 10px; width: 100%; background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; margin-bottom: 6px; cursor: pointer; flex-wrap: wrap; }
+.day-row:hover { border-color: #9fb3cc; } .day-row:focus-visible { outline: 2px solid var(--accent); }
+.day-row.inside { border: 0; padding: 0 0 10px; margin: 0; background: transparent; }
+.day-n { min-width: 30px; height: 30px; padding: 0 6px; border-radius: 15px; background: var(--bg); display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: .85rem; flex: none; }
+.day-open .day-n { background: #e3ecfb; color: var(--accent); }
+.day-d { font-size: .82rem; color: var(--muted); min-width: 92px; }
+.day-t { font-weight: 700; }
+.day-row .seg-chev { margin-left: 0; }
+.day-tags { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.tag { font-size: .75rem; padding: 2px 8px; border-radius: 999px; background: var(--bg); color: var(--muted); white-space: nowrap; }
+.tag.opt { background: #efe7fb; color: var(--opt); } .tag.warn { background: var(--warn-bg); color: var(--warn); }
+.tag.hotel { background: #e3ecfb; color: var(--accent); } .tag.fly { background: #e8f3ec; color: var(--ok); }
+.day-open { background: #fff; border: 2px solid var(--accent); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; }
+.day-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 2fr); gap: 0 10px; }
+.item { display: flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 8px; padding: 4px 6px; margin-bottom: 6px; background: #fff; }
+.item.is-opt { border-left: 4px solid var(--opt); }
+.item.dragging { opacity: .4; }
+.item input { margin: 0; border: 0; padding: 6px 4px; }
+.item input:focus { outline: none; background: #f6f8fb; }
+.grip { cursor: grab; color: var(--muted); font-size: 1.1rem; padding: 0 2px; user-select: none; }
+.ico { all: unset; cursor: pointer; padding: 4px 6px; border-radius: 6px; color: var(--muted); filter: grayscale(1); opacity: .55; }
+.ico:hover, .ico:focus-visible { background: var(--bg); opacity: 1; }
+.ico.on { filter: none; opacity: 1; background: #efe7fb; }
+@media (max-width: 560px) { .day-grid { grid-template-columns: 1fr 1fr; } .day-tags { margin-left: 0; width: 100%; justify-content: flex-start; } }
 .sticky { position: sticky; bottom: 0; background: var(--bg); padding: 12px 0; border-top: 1px solid var(--line); }
 </style>
 </head>
@@ -178,7 +203,7 @@ legend { font-size:.85rem; font-weight:600; padding:0 6px; }
   <section class="card step" id="step-days" hidden>
     <button type="button" class="step-h" aria-expanded="true"><span class="step-n">6</span><span class="step-t">Программа по дням</span><span class="step-s" id="st-days"></span><span class="chev" aria-hidden="true">⌄</span></button>
     <div class="step-b">
-      <p class="muted legend">Один пункт — одна строка. Строки со словами «доплата / за дополнительную плату» станут <span class="opt">фиолетовыми</span> (опция). Время и место сбора можно оставить пустыми — тогда туристы увидят «время и место сообщит гид».</p>
+      <p class="muted legend">Нажмите на день, чтобы раскрыть. Пункты: ⠿ — перетащить, 🪙 — сделать опцией за доплату (<span class="opt">фиолетовая полоска</span>), ✕ — удалить. Сбор можно оставить пустым — туристы увидят «время и место сообщит гид».</p>
       <div id="days"></div>
     </div>
   </section>
@@ -238,7 +263,8 @@ function parseProgram(text) {
   }
   // Абзац дня → пункты: по одному предложению на строку
   days.forEach(d => {
-    d.items = d.lines.join(" ").split(/(?<=[.!?])\s+(?=[А-ЯЁA-Z«"(])/).map(s => s.trim()).filter(Boolean);
+    d.items = d.lines.join(" ").split(/(?<=[.!?])\s+(?=[А-ЯЁA-Z«"(])/).map(s => s.trim()).filter(Boolean)
+      .map(t => ({ t, opt: OPTION_RE.test(t) }));
   });
   const dm = (preface.join(" ") + " " + text.slice(0, 300)).match(DURATION_RE);
   return { days, sec, preface, declared: dm ? +dm[1] : null };
@@ -258,7 +284,8 @@ function checkProgram(p) {
   if (dup.size) out.push(["err", `День ${[...dup].join(", ")} встречается дважды. Возможно, на странице два варианта программы — оставьте один.`]);
   if (p.declared && p.declared !== max) out.push(["warn", `В заголовке написано «${p.declared} дней», а в программе ${max}.`]);
   p.days.forEach(d => { if (!d.items.length) out.push(["warn", `У дня ${d.from} нет описания.`]); });
-  const opts = p.days.reduce((n, d) => n + d.items.filter(i => OPTION_RE.test(i)).length, 0);
+  p.days.forEach(normItems);
+  const opts = p.days.reduce((n, d) => n + d.items.filter(i => i.opt).length, 0);
   if (!out.some(c => c[0] === "err")) out.unshift(["ok", `Найдено дней: ${max}. Опций за доплату в тексте: ${opts}.`]);
   return out;
 }
@@ -274,27 +301,100 @@ let parsed = null;
 const addDays = (iso, n) => { const d = new Date(iso + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
 const fmtDate = iso => new Date(iso + "T12:00:00Z").toLocaleDateString("ru-RU", { day: "numeric", month: "long", weekday: "short", timeZone: "UTC" });
 
+// Старые сохранения хранили пункты строками — приводим к {t, opt}
+function normItems(d) { d.items = (d.items || []).map(it => typeof it === "string" ? { t: it, opt: OPTION_RE.test(it) } : it); return d; }
+
+/* =========================================================
+   ПРОГРАММА ПО ДНЯМ: каждый день — строка-оглавление со значками,
+   раскрыт один день; пункты — отдельными строками.
+   ========================================================= */
+let OPEN_DAY = -1;
+const dayDate = d => val("f-start") ? addDays(val("f-start"), d.from - 1) : "";
+// Значки дня: видно главное, не раскрывая
+function dayTags(d) {
+  normItems(d);
+  const date = dayDate(d), tags = [];
+  const out0 = LEGS.out.find(l => l.dep), back0 = LEGS.back.find(l => l.dep);
+  if (date && out0 && out0.date === date) tags.push(`<span class="tag fly">✈ вылет ${esc(out0.dep)}</span>`);
+  if (date && back0 && back0.date === date) tags.push(`<span class="tag fly">✈ вылет домой ${esc(back0.dep)}</span>`);
+  const nOpt = d.items.filter(it => it.opt).length;
+  if (nOpt) tags.push(`<span class="tag opt">${nOpt} ${pluralRu(nOpt, "опция", "опции", "опций")}</span>`);
+  if (d.time) tags.push(`<span class="tag">сбор ${esc(d.time)}</span>`);
+  const h = date && HOTELS.find(x => x.name && x.from === date);
+  if (h) tags.push(`<span class="tag hotel">🏨 новый отель${h.city ? ": " + esc(h.city) : ""}</span>`);
+  if (!d.items.some(it => it.t.trim())) tags.push(`<span class="tag warn">⚠ нет описания</span>`);
+  return tags.join("");
+}
+function dayHead(d, i) {
+  const date = dayDate(d);
+  return `<span class="day-n">${d.from === d.to ? d.from : d.from + "–" + d.to}</span>
+    <span class="day-d">${date ? fmtDate(date) : "—"}</span>
+    <span class="day-t">${esc(d.title || (d.from === d.to ? "День " + d.from : "Дни " + d.from + "–" + d.to))}</span>
+    <span class="day-tags" id="tags-${i}">${dayTags(d)}</span>
+    <span class="seg-chev" aria-hidden="true">${i === OPEN_DAY ? "⌃" : "⌄"}</span>`;
+}
 function renderDays() {
-  const start = $("f-start").value;
-  $("days").innerHTML = parsed.days.map((d, i) => `
-    <div class="day" data-i="${i}">
-      <div class="day-h">${d.from === d.to ? `День ${d.from}` : `Дни ${d.from}–${d.to}`}
-        <span class="muted">${start ? fmtDate(addDays(start, d.from - 1)) : "укажите дату начала"}</span></div>
-      <label>Название дня<input data-f="title" value="${esc(d.title)}"></label>
-      <div class="grid">
-        <label>Время сбора<input data-f="time" type="time" value="${esc(d.time || "")}"></label>
-        <label>Место сбора<input data-f="place" value="${esc(d.place || "")}" placeholder="Холл отеля"></label>
+  if (!parsed) return;
+  parsed.days.forEach(normItems);
+  $("days").innerHTML = parsed.days.map((d, i) => {
+    if (i !== OPEN_DAY) return `<button type="button" class="day-row" data-day="${i}" id="dayrow-${i}">${dayHead(d, i)}</button>`;
+    return `<div class="day-open day" data-i="${i}">
+      <button type="button" class="day-row inside" data-day="-1" id="dayrow-${i}">${dayHead(d, i)}</button>
+      <div class="day-grid">
+        <label>Название дня<input data-f="title" value="${esc(d.title)}"></label>
+        <label>Сбор<input data-f="time" type="time" value="${esc(d.time || "")}"></label>
+        <label>Где сбор<input data-f="place" value="${esc(d.place || "")}" placeholder="Холл отеля"></label>
       </div>
-      <label>Пункты дня<textarea data-f="items">${esc(d.items.join("\n"))}</textarea></label>
-    </div>`).join("");
+      <div class="items" data-items="${i}">
+        ${d.items.map((it, k) => `<div class="item${it.opt ? " is-opt" : ""}" draggable="true" data-k="${k}">
+          <span class="grip" title="Перетащите, чтобы поменять порядок" aria-hidden="true">⠿</span>
+          <input data-it="${k}" value="${esc(it.t)}" aria-label="Пункт ${k + 1}">
+          <button type="button" class="ico${it.opt ? " on" : ""}" data-opt="${k}" title="${it.opt ? "Убрать из опций" : "Сделать опцией за доплату"}" aria-pressed="${it.opt}">🪙</button>
+          <button type="button" class="ico" data-del-it="${k}" title="Удалить пункт" aria-label="Удалить пункт">✕</button>
+        </div>`).join("")}
+      </div>
+      <button type="button" class="ghost" data-add-it="${i}" style="margin-top:6px">+ пункт</button>
+    </div>`;
+  }).join("");
+}
+// Значки обновляем на лету (рейсы, отели, сбор поменялись), не трогая поля ввода
+function refreshDayTags() {
+  if (!parsed) return;
+  parsed.days.forEach((d, i) => { const t = $("tags-" + i); if (t) t.innerHTML = dayTags(d); });
 }
 
-// Правки в полях дня сразу пишем обратно в parsed
+// Правки в раскрытом дне
 document.addEventListener("input", e => {
-  const box = e.target.closest(".day"); if (!box) return;
-  const d = parsed.days[+box.dataset.i], f = e.target.dataset.f;
-  if (f === "items") d.items = e.target.value.split("\n").map(s => s.trim()).filter(Boolean);
-  else d[f] = e.target.value;
+  const box = e.target.closest(".day-open"); if (!box) return;
+  const d = parsed.days[+box.dataset.i];
+  if (e.target.dataset.f) { d[e.target.dataset.f] = e.target.value; if (e.target.dataset.f === "title") $("dayrow-" + box.dataset.i).querySelector(".day-t").textContent = e.target.value; }
+  if (e.target.dataset.it != null) d.items[+e.target.dataset.it].t = e.target.value;
+  refreshDayTags();
+});
+document.addEventListener("click", e => {
+  const row = e.target.closest("[data-day]");
+  if (row) { OPEN_DAY = +row.dataset.day; renderDays(); const el = $("dayrow-" + (OPEN_DAY >= 0 ? OPEN_DAY : row.id.split("-")[1])); if (el) el.scrollIntoView({ block: "nearest" }); saveSoon(); return; }
+  const box = e.target.closest(".day-open"); if (!box) return;
+  const d = parsed.days[+box.dataset.i];
+  const op = e.target.closest("[data-opt]"), del = e.target.closest("[data-del-it]"), add = e.target.closest("[data-add-it]");
+  if (op) { const it = d.items[+op.dataset.opt]; it.opt = !it.opt; }
+  else if (del) d.items.splice(+del.dataset.delIt, 1);
+  else if (add) d.items.push({ t: "", opt: false });
+  else return;
+  renderDays(); saveSoon();
+  if (add) { const inputs = document.querySelectorAll(".day-open [data-it]"); inputs[inputs.length - 1].focus(); }
+});
+// Перетаскивание пунктов внутри дня
+let dragK = null;
+document.addEventListener("dragstart", e => { const it = e.target.closest(".item"); if (!it) return; dragK = +it.dataset.k; it.classList.add("dragging"); e.dataTransfer.effectAllowed = "move"; });
+document.addEventListener("dragend", e => { const it = e.target.closest(".item"); if (it) it.classList.remove("dragging"); dragK = null; });
+document.addEventListener("dragover", e => { if (dragK != null && e.target.closest(".day-open .item")) e.preventDefault(); });
+document.addEventListener("drop", e => {
+  const it = e.target.closest(".day-open .item"); if (!it || dragK == null) return;
+  e.preventDefault();
+  const d = parsed.days[+it.closest(".day-open").dataset.i], to = +it.dataset.k;
+  const [moved] = d.items.splice(dragK, 1); d.items.splice(to, 0, moved);
+  dragK = null; renderDays(); saveSoon();
 });
 $("f-start").addEventListener("change", () => parsed && renderDays());
 
@@ -375,7 +475,7 @@ $("parse").addEventListener("click", () => {
     if (!mine("f-title")) $("f-title").value = dep.title;
   }
   if (!mine("f-title")) $("f-title").value = dep.title || head;
-  renderDays(); fillEnd(); checkHotels(); saveNow();
+  OPEN_DAY = -1; renderDays(); fillEnd(); checkHotels(); saveNow();
   $("checks-card").scrollIntoView({ behavior: "smooth" });
 });
 
@@ -899,11 +999,12 @@ function buildTrip() {
   T.days = [];
   parsed.days.forEach(d => {
     for (let n = d.from; n <= d.to; n++) {
-      const items = n === d.from ? d.items : [`Продолжение программы: ${d.title}`];
+      normItems(d);
+      const items = n === d.from ? d.items.filter(it => it.t.trim()) : [{ t: `Продолжение программы: ${d.title}`, opt: false }];
       T.days.push({
         date: addDays(start, n - 1), title: d.title || `День ${n}`,
         meeting: d.time || d.place ? { time: d.time || null, place: d.place || "" } : { time: null, wa: "время и место" },
-        items: items.map(t => OPTION_RE.test(t) ? { t, opt: true } : { t })
+        items: items.map(it => it.opt ? { t: it.t.trim(), opt: true } : { t: it.t.trim() })
       });
     }
   });
@@ -995,7 +1096,7 @@ function updateStatus() {
   else if (!val("f-rate")) setStatus("dest", "warn", `${val("f-city")} · нет курса валюты`);
   else setStatus("dest", "ok", val("f-city"));
   // Дни
-  const empty = parsed.days.filter(d => !d.items.length).length;
+  const empty = parsed.days.filter(d => !d.items.some(it => (it.t || it).trim())).length;
   setStatus("days", errs.length || empty ? "warn" : "ok", errs.length ? "пропуски или повторы" : empty ? `${empty} ${pluralRu(empty, "день", "дня", "дней")} без описания` : "всё на месте");
   // Условия
   const inc = $("f-included").value.trim(), ninc = $("f-notincluded").value.trim();
@@ -1013,9 +1114,9 @@ function saveNow() {
   const fields = {};
   document.querySelectorAll("main input[id], main textarea[id], main select[id]").forEach(el => { fields[el.id] = el.type === "checkbox" ? el.checked : el.value; });
   const state = { v: 1, fields, LEGS, HOTELS, parsed, typed: [...TYPED], touched: [...touched], depFound: DEP_FOUND,
-                  collapsed: [...document.querySelectorAll(".step.collapsed")].map(s => s.id), autoEnd };
+                  collapsed: [...document.querySelectorAll(".step.collapsed")].map(s => s.id), autoEnd, openDay: OPEN_DAY };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); } catch {}
-  updateStatus();
+  updateStatus(); refreshDayTags();
 }
 document.addEventListener("input", saveSoon);
 document.addEventListener("change", saveSoon);
@@ -1031,7 +1132,7 @@ function restore() {
     if (el.type === "checkbox") el.checked = v; else el.value = v;
   }
   (st.typed || []).forEach(id => TYPED.add(id));
-  autoEnd = st.autoEnd || "";
+  autoEnd = st.autoEnd || ""; OPEN_DAY = st.openDay != null ? st.openDay : -1;
   (st.touched || []).forEach(id => touched.add(id));
   if (st.LEGS) { LEGS.out = st.LEGS.out; LEGS.back = st.LEGS.back; renderLegs("out"); renderLegs("back"); }
   if (st.HOTELS) { HOTELS.splice(0, HOTELS.length, ...st.HOTELS); }
