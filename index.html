@@ -384,6 +384,7 @@ details.guide[open] summary { margin-bottom: 8px; }
 .opt-card[open] summary .opt-t::after { content: "\00a0▴"; }
 .opt-card[open] > :not(summary) { margin-top: 10px; }
 a.pill.opt { text-decoration: none; white-space: nowrap; }
+.nodraft { background: #fff1dc; color: #7a4300; padding: 10px 14px; font-size: .85rem; line-height: 1.35; }
 /* Машина времени (только ?draft / ?demo) */
 .tm-bar { position: sticky; top: 0; z-index: 50; display: flex; gap: 6px; align-items: center; overflow-x: auto; padding: 8px 12px; background: #1d2433; color: #fff; font-size: .82rem; scrollbar-width: none; }
 .tm-bar::-webkit-scrollbar { display: none; }
@@ -563,8 +564,9 @@ function applyI18n() {
 const getJSON = url => fetch(url).then(r => { if (!r.ok) throw new Error(url + ": HTTP " + r.status); return r.json(); });
 // ?draft — предпросмотр из конструктора: данные берём из памяти браузера, а не из trip.json
 const DRAFT = new URLSearchParams(location.search).has("draft");
+let NO_DRAFT = false;   // ?draft открыли на устройстве, где конструктора не было (например, ссылку переслали на телефон)
 const loadTrip = () => {
-  if (DRAFT) { try { const d = JSON.parse(localStorage.getItem("tripDraft")); if (d) return Promise.resolve(d); } catch {} }
+  if (DRAFT) { try { const d = JSON.parse(localStorage.getItem("tripDraft")); if (d) return Promise.resolve(d); } catch {} NO_DRAFT = true; }
   return getJSON("trip.json");
 };
 loadTrip()
@@ -580,6 +582,10 @@ loadTrip()
     document.getElementById("hdr-title").textContent = data.title;
     document.getElementById("hdr-eyebrow").textContent = data.eyebrow || "";
     if (TM_ON) timeMachine(data);
+    if (NO_DRAFT) {   // не молчим: иначе кажется, что показан черновик, а это тур сайта
+      const n = document.createElement("div"); n.className = "nodraft"; n.textContent = tx("noDraft");
+      document.body.prepend(n);
+    }
     const s = document.createElement("script");
     s.src = "app.js";
     document.body.appendChild(s);
