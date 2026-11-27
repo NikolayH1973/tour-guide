@@ -9,6 +9,7 @@
 /* Внутренний инструмент: простой и понятный, без украшений */
 :root { --ink:#142033; --muted:#5b6575; --line:#d6dbe3; --bg:#eef1f5; --card:#fff; --accent:#003688; --warn:#9a5b00; --warn-bg:#fff4e0; --err:#b3261e; --err-bg:#fdecea; --ok:#17693a; --opt:#6b3fb5; }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body { margin:0; font:16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; color:var(--ink); background:var(--bg); }
 main { max-width: 900px; margin: 0 auto; padding: 24px 16px 80px; }
 h1 { font-size: 1.6rem; margin: 0 0 4px; }
@@ -56,6 +57,39 @@ legend { font-size:.85rem; font-weight:600; padding:0 6px; }
 .dates { align-items: end; }
 .days-n { font-weight: 700; padding: 0 0 18px; }
 .ok-t { color: var(--ok); font-weight: 700; } .warn-t { color: var(--warn); font-weight: 700; }
+/* Рейсы: «туда» — синий, «обратно» — зелёный; сегменты — строки, раскрыт один */
+.dir { border-radius: 12px; padding: 12px 14px; margin-bottom: 14px; }
+.dir-out { background: #eef4ff; border: 1px solid #c7d8f6; }
+.dir-back { background: #eef8f1; border: 1px solid #bfe2cb; }
+.dir-h { display: flex; align-items: center; gap: 8px; font-weight: 700; margin-bottom: 10px; }
+.dir-out .dir-h { color: #1d4f9c; } .dir-back .dir-h { color: #1f6a3a; }
+.dir-ico { font-size: 1.2rem; }
+.dir-sum { margin-left: auto; font-weight: 400; font-size: .82rem; color: var(--muted); background: #fff; border-radius: 999px; padding: 3px 10px; }
+.seg-row { all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 10px; width: 100%; background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; cursor: pointer; flex-wrap: wrap; }
+.seg-row:hover { border-color: #9fb3cc; }
+.seg-row:focus-visible { outline: 2px solid var(--accent); }
+.seg-n { width: 24px; height: 24px; border-radius: 50%; background: var(--bg); display: inline-flex; align-items: center; justify-content: center; font-size: .8rem; font-weight: 700; flex: none; }
+.seg-route { font-weight: 700; }
+.seg-time { color: var(--muted); font-size: .9rem; }
+.seg-chev { margin-left: auto; color: var(--muted); }
+.seg-open { background: #fff; border: 2px solid var(--accent); border-radius: 10px; padding: 10px 12px; }
+.seg-open .seg-top { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.seg-open .seg-top button { min-height: 32px; padding: 4px 10px; font-size: .8rem; }
+.seg-grid { display: grid; gap: 0 12px; }
+.seg-g1 { grid-template-columns: 1fr auto 1fr; align-items: end; }
+.seg-g1 .arrow { padding-bottom: 20px; color: var(--muted); }
+.seg-g2 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.seg-g3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.chip { display: inline-block; font-size: .82rem; padding: 3px 10px; border-radius: 999px; background: #e8f3ec; color: var(--ok); }
+.chip.bad { background: var(--warn-bg); color: var(--warn); }
+.seg-meta { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: .82rem; color: var(--muted); margin: -2px 0 6px; }
+.seg-meta label { display: inline-flex; gap: 6px; align-items: center; margin: 0; color: var(--muted); }
+.seg-meta input[type=checkbox] { width: auto; margin: 0; }
+.air-name { font-size: .8rem; color: var(--muted); }
+.lay { font-size: .82rem; color: var(--muted); margin: 6px 0 6px 34px; }
+.lay.bad { color: var(--warn); font-weight: 600; }
+.leg-warn { margin-top: 8px; }
+@media (max-width: 560px) { .seg-g2 { grid-template-columns: 1fr 1fr; } }
 .sticky { position: sticky; bottom: 0; background: var(--bg); padding: 12px 0; border-top: 1px solid var(--line); }
 </style>
 </head>
@@ -105,10 +139,8 @@ legend { font-size:.85rem; font-weight:600; padding:0 6px; }
   <section class="card step" id="step-flights" hidden>
     <button type="button" class="step-h" aria-expanded="true"><span class="step-n">3</span><span class="step-t">Рейсы</span><span class="step-s" id="st-flights"></span><span class="chev" aria-hidden="true">⌄</span></button>
     <div class="step-b">
-      <fieldset><legend>Рейсы туда</legend><div id="legs-out"></div>
-        <button type="button" class="ghost" data-add-leg="out" style="margin-bottom:12px">+ пересадка</button></fieldset>
-      <fieldset><legend>Рейсы обратно</legend><div id="legs-back"></div>
-        <button type="button" class="ghost" data-add-leg="back" style="margin-bottom:12px">+ пересадка</button></fieldset>
+      <div class="dir dir-out" id="dir-out"></div>
+      <div class="dir dir-back" id="dir-back"></div>
       <label>Сколько лететь — для фразы «… в самолёте — время подготовиться»<input id="f-duration" placeholder="Пять часов"></label>
     </div>
   </section>
@@ -369,7 +401,8 @@ function applyDeparture(dep) {
     // Туда: первый вылет — в день начала. Обратно: последний прилёт — в день окончания тура
     const first = dir === "out" ? dep.start : (end ? addDays(end, -chain[chain.length - 1].depDay - (chain[chain.length - 1].next ? 1 : 0)) : "");
     LEGS[dir] = chain.map(l => ({ no: "", airline: dep.airline[dir] || "", from: l.from, to: l.to, dep: l.dep, arr: l.arr,
-      next: l.next, date: first ? addDays(first, l.depDay) : "", tz: guessTz(l.from) }));
+      next: l.next, date: first ? addDays(first, l.depDay) : "", tz: "", arrTz: "", nextManual: false, dateManual: false }));
+    OPEN[dir] = -1;          // после разбора все сегменты свёрнуты в строки — так легче проверить
     renderLegs(dir);
   }
   const found = [dep.start && "даты", dep.guide && "гид", dep.legs.out.length && `рейсы туда (${dep.legs.out.length})`,
@@ -604,43 +637,177 @@ const TZ_BY_CITY = {
 const normCity = s => String(s || "").toLowerCase().replace(/[\s\-–]/g, "").replace(/ё/g, "е");
 const TZ_NORM = Object.fromEntries(Object.entries(TZ_BY_CITY).map(([k, v]) => [normCity(k), v]));
 const guessTz = city => TZ_NORM[normCity(city)] || "";   // «Хо Ши Мин» = «Хошимин»
+// Авиакомпании по коду: «EK» → Emirates. Без внешних сервисов.
+const AIRLINES = { EK: "Emirates", LY: "El Al", FZ: "flydubai", "6H": "Israir", IZ: "Arkia", TK: "Turkish Airlines", PC: "Pegasus",
+  A3: "Aegean", LH: "Lufthansa", OS: "Austrian", LX: "Swiss", AF: "Air France", KL: "KLM", BA: "British Airways", AZ: "ITA Airways",
+  IB: "Iberia", VY: "Vueling", W6: "Wizz Air", FR: "Ryanair", U2: "easyJet", QR: "Qatar Airways", EY: "Etihad", ET: "Ethiopian Airlines",
+  VN: "Vietnam Airlines", TG: "Thai Airways", SQ: "Singapore Airlines", CX: "Cathay Pacific", KE: "Korean Air", OZ: "Asiana",
+  JL: "Japan Airlines", NH: "ANA", MU: "China Eastern", CA: "Air China", HY: "Uzbekistan Airways", J2: "AZAL", LO: "LOT", RO: "TAROM",
+  WY: "Oman Air", GF: "Gulf Air", MS: "EgyptAir", RJ: "Royal Jordanian", AT: "Royal Air Maroc", UX: "Air Europa", TP: "TAP Air Portugal",
+  SK: "SAS", AY: "Finnair", DY: "Norwegian", BT: "airBaltic", AI: "Air India", UL: "SriLankan Airlines", QF: "Qantas", UA: "United",
+  DL: "Delta", AA: "American Airlines", G9: "Air Arabia", "3O": "Air Arabia Maroc", XY: "flynas", SV: "Saudia" };
+const airlineName = code => AIRLINES[String(code || "").trim().toUpperCase()] || "";
+
 const LEGS = { out: [], back: [] };
-const newLeg = (dir, prev) => ({ no: "", from: prev ? prev.to : (dir === "out" ? "Тель-Авив" : ""), to: dir === "back" ? "Тель-Авив" : "",   // обратно последний сегмент всегда летит домой
-  date: prev ? prev.date : "", dep: "", arr: "", next: false, tz: prev ? guessTz(prev.to) : (dir === "out" ? "Asia/Jerusalem" : "") });
+const OPEN = { out: 0, back: 0 };   // какой сегмент раскрыт в каждом направлении
+const newLeg = (dir, prev) => ({ airline: prev ? prev.airline : "", no: "",
+  from: prev ? prev.to : (dir === "out" ? "Тель-Авив" : ""), to: dir === "back" ? "Тель-Авив" : "",   // обратно последний сегмент летит домой
+  date: "", dep: "", arr: "", next: false, tz: "", arrTz: "", nextManual: false, dateManual: false });
 LEGS.out.push(newLeg("out")); LEGS.back.push(newLeg("back"));
 
+/* --- Расчёты: часовые пояса, +1 день, в пути, даты, пересадки ---
+   Пояс вылета/прилёта — по городу (справочник), иначе: начало пути туда и конец пути обратно — дом,
+   конец пути туда и начало пути обратно — направление тура. Неизвестный город — человек выберет пояс сам. */
+const homeTz = () => (BASE && BASE.home && BASE.home.tz) || "Asia/Jerusalem";
+const instant = (date, time, tz) => date && time && tz ? Date.parse(`${date}T${time}:00${tzOffset(tz, date)}`) : NaN;
+const fmtDur = ms => { const m = Math.round(ms / 6e4), h = Math.floor(m / 60), r = m % 60; return h ? `${h} ч${r ? " " + String(r).padStart(2, "0") + " мин" : ""}` : `${r} мин`; };
+// «Дубай» → ["в Дубае", "Дубая", "Дубаю"]: из справочника направлений, иначе по правилам склонения
+const cityForms = name => { const k = String(name || "").trim().toLowerCase(); return DEST[k] ? DEST[k].slice(0, 3) : declineRu(String(name || "").trim()); };
+const cityIn = tz => { const c = TZ_LIST.find(([z]) => z === tz); if (tz === homeTz()) return "по Израилю"; const city = Object.keys(TZ_BY_CITY).find(k => TZ_BY_CITY[k] === tz); return city ? "по " + cityForms(city[0].toUpperCase() + city.slice(1))[2] : "по местному"; };
+function legTz(dir, i) {
+  const legs = LEGS[dir], l = legs[i], n = legs.length;
+  const dep = l.tz || guessTz(l.from) || (i === 0 ? (dir === "out" ? homeTz() : val("f-tz")) : "");
+  const arr = l.arrTz || guessTz(l.to) || (i === n - 1 ? (dir === "back" ? homeTz() : val("f-tz")) : "");
+  return [dep, arr];
+}
+const WARN = { out: [], back: [] };
+function computeDir(dir) {
+  const legs = LEGS[dir], n = legs.length, start = val("f-start"), end = tripEnd(), warn = [];
+  legs.forEach((l, i) => {
+    [l._dtz, l._atz] = legTz(dir, i);
+    // Дата: первый сегмент туда — начало тура; следующие — в день прилёта предыдущего (или на следующий, если по часам раньше)
+    if (!l.dateManual) {
+      if (i === 0) l.date = dir === "out" ? (start || l.date) : (l.date || end);
+      else { const p = legs[i - 1], pArr = addDays(p.date || start || end, p.next ? 1 : 0);
+             l.date = p.arr && l.dep && mins(l.dep) < mins(p.arr) ? addDays(pArr, 1) : pArr; }
+    }
+    // +1 день: выбираем сдвиг, при котором полёт длится правдоподобно (от 30 минут до 20 часов)
+    l._dur = null;
+    if (l.date && l.dep && l.arr && l._dtz && l._atz) {
+      const d0 = instant(l.date, l.dep, l._dtz);
+      if (!l.nextManual) for (const k of [0, 1]) { const dur = instant(addDays(l.date, k), l.arr, l._atz) - d0; if (dur >= 18e5 && dur <= 72e6) { l.next = k === 1; break; } }
+      l._dur = instant(addDays(l.date, l.next ? 1 : 0), l.arr, l._atz) - d0;
+      if (!(l._dur >= 18e5 && l._dur <= 72e6)) warn.push(`Сегмент ${i + 1}: проверьте время — получается ${l._dur < 0 ? "отрицательное время в пути" : "в пути " + fmtDur(l._dur)}.`);
+    } else if (!l.nextManual && l.dep && l.arr) l.next = mins(l.arr) < mins(l.dep);
+    if (l.from && !l._dtz) warn.push(`Сегмент ${i + 1}: не знаю часовой пояс города «${l.from}» — выберите его ниже.`);
+    if (l.to && !l._atz) warn.push(`Сегмент ${i + 1}: не знаю часовой пояс города «${l.to}» — выберите его ниже.`);
+  });
+  // Обратно: последний прилёт домой — в последний день тура (если дату первого сегмента не правили руками)
+  if (dir === "back" && end && n && legs[n - 1].date) {
+    const lastArr = addDays(legs[n - 1].date, legs[n - 1].next ? 1 : 0);
+    if (!legs[0].dateManual && lastArr !== end) { const shift = daysBetween(lastArr, end) - 1; legs.forEach(l => { if (!l.dateManual) l.date = addDays(l.date, shift); }); }
+    const finalArr = addDays(legs[n - 1].date, legs[n - 1].next ? 1 : 0);
+    if (finalArr !== end) warn.push(`Прилёт домой ${fmtDate(finalArr)}, а тур заканчивается ${fmtDate(end)} — проверьте даты.`);
+  }
+  // Пересадки
+  legs.forEach((l, i) => {
+    l._lay = null; if (!i) return;
+    const p = legs[i - 1], a = instant(addDays(p.date, p.next ? 1 : 0), p.arr, p._atz), d = instant(l.date, l.dep, l._dtz);
+    if (!isNaN(a) && !isNaN(d)) { l._lay = d - a; if (l._lay < 0) warn.push(`Пересадка ${cityForms(p.to)[0]}: вылет раньше прилёта — проверьте время.`); else if (l._lay > 864e5) warn.push(`Пересадка ${cityForms(p.to)[0]} больше суток — проверьте даты.`); }
+  });
+  WARN[dir] = warn;
+}
+
+/* --- Отрисовка --- */
+const tzOptions = sel => `<option value="">— по городу —</option>` + TZ_LIST.map(([z, name]) => `<option value="${z}"${z === sel ? " selected" : ""}>${esc(name)}</option>`).join("");
+const segTimes = l => l.dep || l.arr ? `${l.dep || "—"} – ${l.arr || "—"}${l.next ? " (+1)" : ""}` : "время не указано";
+function dirSummary(dir) {
+  const legs = LEGS[dir], d = legs[0] && legs[0].date;
+  return `${d ? fmtDate(d) : "дата не указана"} · ${legs.length} ${pluralRu(legs.length, "сегмент", "сегмента", "сегментов")}`;
+}
+function legChip(l) {
+  if (l._dur == null) return l.dep && l.arr ? "" : `<span class="chip bad">укажите вылет и прилёт</span>`;
+  const ok = l._dur >= 18e5 && l._dur <= 72e6;
+  return `<span class="chip${ok ? "" : " bad"}">${l.next ? "+1 день · " : ""}в пути ${ok ? fmtDur(l._dur) : "?"}</span>`;
+}
 function renderLegs(dir) {
-  const many = LEGS[dir].length > 1;
-  $("legs-" + dir).innerHTML = LEGS[dir].map((l, i) => `
-    <div class="leg" data-dir="${dir}" data-n="${i}">
-      ${many ? `<div class="leg-h">Сегмент ${i + 1}<button type="button" class="ghost" data-del-leg>убрать</button></div>` : ""}
-      <div class="grid">
-        <label>Авиакомпания<input data-l="airline" value="${esc(l.airline || "")}" placeholder="EK"></label>
-        <label>Номер рейса (если известен)<input data-l="no" value="${esc(l.no)}" placeholder="${dir === "out" ? "FZ1546" : "VN…"}"></label>
-        <label>Откуда<input data-l="from" value="${esc(l.from)}"></label>
+  computeDir(dir);
+  const legs = LEGS[dir], many = legs.length > 1, title = dir === "out" ? "Рейсы туда" : "Рейсы обратно";
+  const ico = dir === "out" ? "🛫" : "🛬";
+  let html = `<div class="dir-h"><span class="dir-ico" aria-hidden="true">${ico}</span>${title}<span class="dir-sum" id="dirsum-${dir}">${dirSummary(dir)}</span></div>`;
+  legs.forEach((l, i) => {
+    if (i) html += `<div class="lay" id="lay-${dir}-${i}"></div>`;
+    if (i !== OPEN[dir]) {
+      html += `<button type="button" class="seg-row" data-open="${dir}:${i}" id="row-${dir}-${i}"></button>`;
+      return;
+    }
+    const [dtz, atz] = [l._dtz, l._atz];
+    html += `<div class="seg-open leg" data-dir="${dir}" data-n="${i}">
+      <div class="seg-top"><span class="seg-n">${i + 1}</span><b class="seg-route" id="title-${dir}-${i}"></b>
+        <span style="margin-left:auto;display:flex;gap:6px">${many ? `<button type="button" class="ghost" data-del-leg>убрать</button>` : ""}${many ? `<button type="button" class="ghost" data-open="${dir}:-1">свернуть</button>` : ""}</span></div>
+      <div class="seg-grid seg-g1">
+        <label>Откуда<input data-l="from" value="${esc(l.from)}"></label><span class="arrow" aria-hidden="true">→</span>
         <label>Куда<input data-l="to" value="${esc(l.to)}"></label>
+      </div>
+      <div class="seg-grid seg-g2">
         <label>Дата вылета<input data-l="date" type="date" value="${esc(l.date)}"></label>
         <label>Вылет (местное)<input data-l="dep" type="time" value="${esc(l.dep)}"></label>
         <label>Прилёт (местное)<input data-l="arr" type="time" value="${esc(l.arr)}"></label>
-        <label>Часовой пояс вылета<input data-l="tz" value="${esc(l.tz)}" placeholder="Asia/Dubai"></label>
-        <label style="display:flex;gap:8px;align-items:center;color:var(--ink);margin-top:24px"><input data-l="next" type="checkbox" ${l.next ? "checked" : ""} style="width:auto;margin:0"> прилёт на следующий день</label>
       </div>
-    </div>`).join("");
+      <div class="seg-meta"><span id="chip-${dir}-${i}"></span><span id="tzline-${dir}-${i}"></span>
+        <label><input data-l="next" type="checkbox" ${l.next ? "checked" : ""}> прилёт на следующий день</label></div>
+      <div class="seg-grid seg-g3" id="tzsel-${dir}-${i}">
+        <label data-tzf="dep">Часовой пояс вылета<select data-l="tz">${tzOptions(l.tz)}</select></label>
+        <label data-tzf="arr">Часовой пояс прилёта<select data-l="arrTz">${tzOptions(l.arrTz)}</select></label>
+      </div>
+      <div class="seg-grid seg-g3">
+        <label>Авиакомпания <span class="air-name" id="air-${dir}-${i}"></span><input data-l="airline" value="${esc(l.airline || "")}" placeholder="EK"></label>
+        <label>Номер рейса — из билета<input data-l="no" value="${esc(l.no)}" placeholder="появится с билетами"></label>
+      </div>
+    </div>`;
+  });
+  html += `<div class="leg-warn" id="legwarn-${dir}"></div>
+    <button type="button" class="ghost" data-add-leg="${dir}" style="margin-top:10px">+ пересадка</button>`;
+  $("dir-" + dir).innerHTML = html;
+  refreshLegs(dir);
+}
+// Обновить расчётные части, не перерисовывая поля ввода (чтобы не сбить курсор)
+function refreshLegs(dir) {
+  computeDir(dir);
+  const legs = LEGS[dir];
+  $("dirsum-" + dir).textContent = dirSummary(dir);
+  legs.forEach((l, i) => {
+    const route = `${l.from || "?"} → ${l.to || "?"}`;
+    const row = $(`row-${dir}-${i}`);
+    if (row) row.innerHTML = `<span class="seg-n">${i + 1}</span><span class="seg-route">${esc(route)}</span><span class="seg-time">${esc(segTimes(l))}${l.airline ? " · " + esc(l.airline.toUpperCase()) : ""}${l.no ? " " + esc(l.no) : ""}</span><span class="seg-chev" aria-hidden="true">⌄</span>`;
+    const t = $(`title-${dir}-${i}`); if (t) t.textContent = route;
+    const c = $(`chip-${dir}-${i}`); if (c) c.innerHTML = legChip(l);
+    const z = $(`tzline-${dir}-${i}`);
+    if (z) z.textContent = l._dtz && l._atz ? `время местное: вылет ${cityIn(l._dtz)}, прилёт ${cityIn(l._atz)}` : "";
+    const sel = $(`tzsel-${dir}-${i}`);
+    if (sel) { sel.querySelector('[data-tzf="dep"]').hidden = !!(guessTz(l.from) || (!l.tz && l._dtz)); sel.querySelector('[data-tzf="arr"]').hidden = !!(guessTz(l.to) || (!l.arrTz && l._atz));
+               sel.hidden = [...sel.children].every(x => x.hidden); }
+    const nx = document.querySelector(`.leg[data-dir="${dir}"][data-n="${i}"] [data-l="next"]`); if (nx) nx.checked = l.next;
+    const dt = document.querySelector(`.leg[data-dir="${dir}"][data-n="${i}"] [data-l="date"]`); if (dt && document.activeElement !== dt) dt.value = l.date || "";
+    const a = $(`air-${dir}-${i}`); if (a) a.textContent = airlineName(l.airline) ? "— " + airlineName(l.airline) : "";
+    const lay = $(`lay-${dir}-${i}`);
+    if (lay) { const bad = l._lay != null && (l._lay < 0 || l._lay > 864e5);
+               lay.className = "lay" + (bad ? " bad" : "");
+               const where = legs[i - 1].to ? cityForms(legs[i - 1].to)[0] : "";
+               lay.textContent = `🕓 пересадка ${where}${l._lay == null ? "" : " · " + (l._lay < 0 ? "вылет раньше прилёта!" : fmtDur(l._lay))}`; }
+  });
+  $("legwarn-" + dir).innerHTML = WARN[dir].map(w => `<div class="check warn">${esc(w)}</div>`).join("");
 }
 document.addEventListener("input", e => {
   const box = e.target.closest(".leg[data-dir]"); if (!box) return;   // только сегменты рейсов, не отели
-  const l = LEGS[box.dataset.dir][+box.dataset.n], k = e.target.dataset.l;
+  const dir = box.dataset.dir, l = LEGS[dir][+box.dataset.n], k = e.target.dataset.l;
   l[k] = e.target.type === "checkbox" ? e.target.checked : e.target.value;
-  // Город вылета поменялся — подставим его часовой пояс, если знаем
-  if (k === "from" && guessTz(l.from)) { l.tz = guessTz(l.from); box.querySelector('[data-l="tz"]').value = l.tz; }
+  if (k === "next") l.nextManual = true;          // поставил/снял сам — больше не трогаем
+  if (k === "date") l.dateManual = true;
+  if (k === "airline") l.airline = l.airline.toUpperCase();
+  refreshLegs(dir);
+  if (dir === "out") refreshLegs("back");          // даты обратно не зависят, но пояс направления — общий
 });
 document.addEventListener("click", e => {
   const add = e.target.closest("[data-add-leg]");
-  if (add) { const dir = add.dataset.addLeg, list = LEGS[dir]; list.push(newLeg(dir, list[list.length - 1])); renderLegs(dir); }
+  if (add) { const dir = add.dataset.addLeg, list = LEGS[dir]; list.push(newLeg(dir, list[list.length - 1])); OPEN[dir] = list.length - 1; renderLegs(dir); }
   const del = e.target.closest("[data-del-leg]");
-  if (del) { const box = del.closest(".leg"); LEGS[box.dataset.dir].splice(+box.dataset.n, 1); renderLegs(box.dataset.dir); }
+  if (del) { const box = del.closest(".leg"), dir = box.dataset.dir; LEGS[dir].splice(+box.dataset.n, 1); OPEN[dir] = Math.max(0, +box.dataset.n - 1); renderLegs(dir); }
+  const op = e.target.closest("[data-open]");
+  if (op) { const [dir, i] = op.dataset.open.split(":"); OPEN[dir] = +i; renderLegs(dir); }
 });
-renderLegs("out"); renderLegs("back");
+// Даты тура и направление влияют на даты и пояса сегментов
+["f-start", "f-end", "f-tz", "f-city"].forEach(id => $(id).addEventListener("change", () => { renderLegs("out"); renderLegs("back"); }));
 
 /* =========================================================
    СБОРКА trip.json
@@ -700,12 +867,14 @@ function buildTrip() {
   const home = T.home.tz;
   const tzName = tz => tz === home ? "по " + T.home.dat : "по местному времени";
   const direction = (dir, defDate) => {
+    computeDir(dir);
     const legs = LEGS[dir].filter(l => l.no || l.dep || l.to).map(l => {
       // номер рейса — только настоящий (буквы + цифры); код авиакомпании без номера статус не даст
-      const date = l.date || defDate, tz = l.tz || guessTz(l.from) || (dir === "out" ? home : tz0);
+      const date = l.date || defDate, tz = l._dtz || (dir === "out" ? home : tz0);
       const no = l.no.trim().toUpperCase().replace(/\s+/g, "");
       return { no: /\d/.test(no) ? no : "", airline: (l.airline || "").trim().toUpperCase() || no.replace(/\d.*/, ""), from: l.from.trim(), to: l.to.trim(), dep: l.dep, arr: l.arr + (l.next ? " (+1)" : ""),
-               date, at: l.dep ? `${date}T${l.dep}:00${tzOffset(tz, date)}` : null, tz, tzName: tzName(tz) };
+               date, at: l.dep ? `${date}T${l.dep}:00${tzOffset(tz, date)}` : null, tz, tzName: tzName(tz),
+               arrTz: l._atz || "", durMin: l._dur > 0 ? Math.round(l._dur / 6e4) : null };
     });
     if (!legs.length) return T.flights[dir];
     const first = legs[0], last = legs[legs.length - 1];
@@ -814,6 +983,7 @@ function updateStatus() {
   const has = dir => LEGS[dir].some(l => l.dep);
   const nums = [...LEGS.out, ...LEGS.back].some(l => /\d/.test(l.no || ""));
   if (!has("out") || !has("back")) setStatus("flights", "warn", `нет времени вылета ${!has("out") ? "туда" : "обратно"}`);
+  else if (WARN.out.length || WARN.back.length) setStatus("flights", "warn", (WARN.back[0] || WARN.out[0]).replace(/ — .*$/, "").slice(0, 60));
   else setStatus("flights", "ok", nums ? "с номерами рейсов" : "предварительно, без номеров");
   // Отели
   const hs = HOTELS.filter(h => h.name);
@@ -894,7 +1064,7 @@ const EXAMPLE_TEXT = `Организованные туры Пример-Тур 
 ДЕНЬ 1. Тель-Авив – Дубай
 Вечерний вылет в Ханой с пересадкой в Дубае.
 ДЕНЬ 2. Ханой
-Прилёт в Ханой днём. Встреча с гидом и трансфер в гостиницу. 3 ночи в Ханое.
+Прилёт в Ханой во второй половине дня. Встреча с гидом и трансфер в гостиницу. 3 ночи в Ханое.
 ДЕНЬ 3. Ханой
 Обзорная экскурсия: мавзолей Хо Ши Мина, Храм литературы, озеро Возвращённого меча. Вечером шоу водяных кукол (за дополнительную плату).
 ДЕНЬ 4. Бухта Халонг
@@ -932,8 +1102,8 @@ const EXAMPLE_TEXT = `Организованные туры Пример-Тур 
 Примечание: треб. виза
 Информация о перелёте
 Вылет: EK
-Тель-Авив - Дубай 22:45-02:55
-Дубай - Ханой 04:40-14:20
+Тель-Авив - Дубай 22:45-03:55
+Дубай - Ханой 06:40-16:20
 Возврат: EK
 Хо Ши Мин - Дубай 10:05-14:05
 Дубай - Тель-Авив 16:50-18:20`;
@@ -961,6 +1131,7 @@ $("example").addEventListener("click", () => {
 // Список часовых поясов: строим, когда все функции уже объявлены; при смене даты — заново (летнее/зимнее время)
 fillTzList();
 $("f-start").addEventListener("change", fillTzList);
+renderLegs("out"); renderLegs("back");
 
 // Основа нового тура — чистый шаблон base.json: интерфейс, чек-лист, настройки «дома». Ни одного города.
 fetch("base.json").then(r => r.json()).then(T => { BASE = T; restore(); })
