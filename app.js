@@ -420,7 +420,7 @@ function flightRouteHtml(kind, open) {
     }
   });
   const homeArr = kind === "back" && last.arrMs ? `<p class="rt-final">${tx("rtHomeArr", hmIn(last.arrMs, home), wday(dateIn(last.arrMs, home)), fmt(dateIn(last.arrMs, home)))}</p>` : "";
-  return `<details class="card route ${kind}"${open ? " open" : ""}>
+  return `<details class="card flroute fr-${kind}"${open ? " open" : ""}>
     <summary>
       <span class="rt-h">${kind === "out" ? tx("rtOut") : tx("rtBack")} <span class="muted rt-dir">${esc(first.from)} → ${esc(last.to)}</span></span>
       <span class="rt-sum">${esc(first.dep)} → ${esc(arrSum)} · ${via}${total ? " · " + tx("rtTotal", durText(Math.round(total / 30) * 30)) : ""}</span>
@@ -432,6 +432,7 @@ function flightRouteHtml(kind, open) {
   </details>`;
 }
 
+let RT_DAY = null;
 function renderToday() {
   const real = tripToday();
   const today = preview || real;
@@ -498,15 +499,17 @@ function renderToday() {
       </article>
       <article class="card">
         <h3>${tx("k107")}</h3>
-        <div class="chips">${TOUR.days.map((d, i) => `<button type="button" class="chip" data-pv="${d.date}">${tx("k100", i + 1, parse(d.date).getDate())}</button>`).join("")}</div>
+        <div class="chips">${TOUR.days.map((d, i) => `<button type="button" class="chip" data-pv="${d.date}">${tx("k100", i + 1, parse(d.date).getDate() + "." + String(parse(d.date).getMonth() + 1).padStart(2, "0"))}</button>`).join("")}</div>
       </article>
     </div>`;
   } else {
     html += `<article class="card"><h2>${tx("k108")}</h2><p>${tx("k109", TOUR.city.name)}</p></article>`;
   }
-  const openRt = [...document.querySelectorAll("#v-today details.route")].map(x => [x.classList.contains("out") ? "out" : "back", x.open]);
+  // Турист раскрыл/свернул маршрут — обновление статуса (раз в 5 мин) не должно это сбрасывать. Только для того же дня.
+  const openRt = RT_DAY === today ? [...document.querySelectorAll("#v-today details.flroute")].map(x => [x.classList.contains("fr-out") ? "fr-out" : "fr-back", x.open]) : [];
+  RT_DAY = today;
   $("#v-today").innerHTML = html;
-  openRt.forEach(([k, o]) => { const el = $("#v-today details.route." + k); if (el) el.open = o; });
+  openRt.forEach(([k, o]) => { const el = $("#v-today details.flroute." + k); if (el) el.open = o; });
   // Длинный тур: прокручиваем полосу дней так, чтобы текущий день был по центру
   const cur = $("#v-today .dot-btn[aria-current]");
   if (cur) { const bar = cur.parentElement; bar.scrollLeft = cur.offsetLeft - bar.offsetLeft - (bar.clientWidth - cur.offsetWidth) / 2; }

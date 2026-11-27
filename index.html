@@ -385,14 +385,15 @@ details.guide[open] summary { margin-bottom: 8px; }
 .opt-card[open] > :not(summary) { margin-top: 10px; }
 a.pill.opt { text-decoration: none; white-space: nowrap; }
 /* Маршрут перелёта */
-details.route > summary { list-style: none; cursor: pointer; display: flex; flex-direction: column; gap: 4px; min-height: 44px; }
-details.route > summary::-webkit-details-marker { display: none; }
+details.flroute { flex-shrink: 0; }   /* в колонке .stack <details> иначе сжимается до высоты заголовка, и содержимое наезжает на соседей */
+details.flroute > summary { list-style: none; cursor: pointer; display: flex; flex-direction: column; gap: 4px; min-height: 44px; }
+details.flroute > summary::-webkit-details-marker { display: none; }
 .rt-h { font-weight: 700; font-size: 1.05rem; }
 .rt-h::after { content: "\00a0▾"; color: var(--muted); font-weight: 400; }
-details.route[open] .rt-h::after { content: "\00a0▴"; }
+details.flroute[open] .rt-h::after { content: "\00a0▴"; }
 .rt-dir { font-weight: 400; font-size: .9rem; }
 .rt-sum { font-size: .92rem; }
-details.route.out { border-left: 4px solid #2f6fd6; } details.route.back { border-left: 4px solid #2e8b57; }
+details.flroute.fr-out { border-left: 4px solid #2f6fd6; } details.flroute.fr-back { border-left: 4px solid #2e8b57; }
 .rt-chip { display: inline-block; align-self: flex-start; font-size: .78rem; padding: 2px 8px; border-radius: 999px; background: var(--bg); color: var(--muted); }
 .rt-chip.ok { background: #e8f3ec; color: #1e6b40; } .rt-chip.late { background: #fff1dc; color: #a35a00; } .rt-chip.bad { background: #fde4e4; color: #a11; }
 .rt-line { list-style: none; margin: 12px 0 0; padding: 0 0 0 18px; position: relative; }
