@@ -115,6 +115,7 @@ legend { font-size:.85rem; font-weight:600; padding:0 6px; }
 .ico:hover, .ico:focus-visible { background: var(--bg); opacity: 1; }
 .ico.on { filter: none; opacity: 1; background: #efe7fb; }
 @media (max-width: 560px) { .day-grid { grid-template-columns: 1fr 1fr; } .day-tags { margin-left: 0; width: 100%; justify-content: flex-start; } }
+.act-err { flex-basis: 100%; background: var(--warn-bg); color: var(--warn); border-radius: 8px; padding: 8px 10px; font-size: .9rem; }
 .sticky { position: sticky; bottom: 0; background: var(--bg); padding: 12px 0; border-top: 1px solid var(--line); }
 </style>
 </head>
@@ -220,6 +221,7 @@ legend { font-size:.85rem; font-weight:600; padding:0 6px; }
   </section>
 
   <div class="sticky row" id="actions" hidden>
+    <div id="act-err" class="act-err" role="alert" hidden></div>
     <button id="preview">Предпросмотр</button>
     <button id="download" class="ghost">Скачать trip.json</button>
   </div>
@@ -1021,12 +1023,15 @@ function buildTrip() {
 function withTrip(fn) {
   try { fn(buildTrip()); } catch (e) { alertBox(e.message); }
 }
+// Почему не получилось — пишем прямо над кнопками: блок проверок в шаге 1 может быть свёрнут, и сообщение терялось
 function alertBox(msg) {
-  $("checks").insertAdjacentHTML("afterbegin", `<div class="check err">${esc(msg)}</div>`);
-  $("checks-card").scrollIntoView({ behavior: "smooth" });
+  const box = $("act-err");
+  box.textContent = "⚠ " + msg; box.hidden = false;
+  clearTimeout(alertBox.t); alertBox.t = setTimeout(() => { box.hidden = true; }, 12000);
 }
 
 $("preview").addEventListener("click", () => withTrip(T => {
+  $("act-err").hidden = true;
   localStorage.setItem("tripDraft", JSON.stringify(T));
   window.open("index.html?draft#program", "_blank");
 }));

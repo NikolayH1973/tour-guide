@@ -619,8 +619,9 @@ function timeMachine(T) {
     <button type="button" data-tm=""${cur ? "" : ' aria-pressed="true"'}>${tx("tmNow")}</button>`;
   document.body.prepend(bar);
   // На узком экране полоска прокручивается — показываем выбранный момент
-  const on = bar.querySelector('[aria-pressed="true"]') || (cur.startsWith("d") && bar.querySelector("select"));
-  if (on) bar.scrollLeft = on.offsetLeft - 80;
+  // («сейчас» — по умолчанию, тогда полоску не двигаем, чтобы было видно начало «🕰 Как будет:»)
+  const on = cur && (bar.querySelector('[aria-pressed="true"]') || (cur.startsWith("d") && bar.querySelector("select")));
+  if (on && bar.scrollWidth > bar.clientWidth) bar.scrollLeft = on.offsetLeft - 80;
   const all = Object.fromEntries([...moments, ...days, ...last].map(([k, , ms]) => [k, ms]));
   const go = k => {
     if (k && all[k]) { sessionStorage.setItem("tmOffset", String(all[k] - RealDate.now())); sessionStorage.setItem("tmKey", k); }

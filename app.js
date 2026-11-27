@@ -527,7 +527,9 @@ function renderProgram() {
         ${wxLine(d.date, true)}
         ${dayItems(d)}
         ${i === 0 ? `<p class="small muted">${tx("k113", TOUR.home.prep, airportTime() + (flightsPrelim() ? ` (${tx("prelimShort")})` : ""), esc(TOUR.airport.name), TOUR.airport.short ? ", " + esc(TOUR.airport.short) : "")}</p>` : ""}
-        <p class="small muted">${i === 0 ? tx("k114", cap(TOUR.city.prep)) : tx("k84")}: ${d.meeting.time ? esc(d.meeting.time) + " · " : ""}${d.meeting.wa ? esc(waText(d.meeting).replace(tx("k86"), tx("k87"))) : esc(d.meeting.place)}</p>
+        ${i === 0 && d.meeting.wa && !d.meeting.time
+          ? `<p class="small muted">${esc(waText(d.meeting))}</p>`   /* день вылета: без «Во Вьетнаме:» — рядом уже «Сбор в Израиле» */
+          : `<p class="small muted">${i === 0 ? tx("k114", cap(TOUR.city.prep)) : tx("k84")}: ${d.meeting.time ? esc(d.meeting.time) + " · " : ""}${d.meeting.wa ? esc(waText(d.meeting).replace(tx("k86"), tx("k87"))) : esc(d.meeting.place)}</p>`}
         ${i === 0 ? flightRouteHtml("out", false) : i === TOUR.days.length - 1 ? flightRouteHtml("back", false) : ""}
         <button type="button" class="btn ghost" data-pv-go="${d.date}">${tx("k116")}</button>
       </article>`).join("")}
