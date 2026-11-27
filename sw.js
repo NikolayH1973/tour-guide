@@ -3,7 +3,7 @@
    без интернета — последняя сохранённая. */
 
 // Меняйте версию, если меняется список файлов ниже
-const CACHE = "tour-guide-v10";
+const CACHE = "tour-guide-v11";
 const FILES = ["/", "/index.html", "/app.js", "/trip.json", "/i18n/ru.json", "/manifest.json", "/icon-192.png", "/icon-512.png", "/apple-touch-icon.png"];
 const NETWORK_TIMEOUT = 3000; // мс: в метро сеть бывает «полуживой», долго не ждём
 

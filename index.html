@@ -384,6 +384,13 @@ details.guide[open] summary { margin-bottom: 8px; }
 .opt-card[open] summary .opt-t::after { content: "\00a0▴"; }
 .opt-card[open] > :not(summary) { margin-top: 10px; }
 a.pill.opt { text-decoration: none; white-space: nowrap; }
+/* Машина времени (только ?draft / ?demo) */
+.tm-bar { position: sticky; top: 0; z-index: 50; display: flex; gap: 6px; align-items: center; overflow-x: auto; padding: 8px 12px; background: #1d2433; color: #fff; font-size: .82rem; scrollbar-width: none; }
+.tm-bar::-webkit-scrollbar { display: none; }
+.tm-t { font-weight: 700; white-space: nowrap; margin-right: 4px; }
+.tm-bar button, .tm-bar select { flex: none; font: inherit; color: #fff; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.25); border-radius: 999px; padding: 5px 10px; cursor: pointer; white-space: nowrap; }
+.tm-bar select option { color: #000; }
+.tm-bar [aria-pressed="true"] { background: #fff; color: #1d2433; font-weight: 700; }
 /* Маршрут перелёта */
 details.flroute { flex-shrink: 0; }   /* в колонке .stack <details> иначе сжимается до высоты заголовка, и содержимое наезжает на соседей */
 details.flroute > summary { list-style: none; cursor: pointer; display: flex; flex-direction: column; gap: 4px; min-height: 44px; }
@@ -504,6 +511,20 @@ footer.note { margin-top: 24px; font-size: .8rem; color: var(--muted); text-alig
 </nav>
 
 <script>
+/* МАШИНА ВРЕМЕНИ — только в предпросмотре (?draft) и на показе агентству (?demo); туристы её не видят.
+   Приложение везде берёт «сейчас» из Date. Подменяем Date до запуска движка: к настоящему времени
+   прибавляем сдвиг, и часы, обратный отсчёт, «сегодня», рейсы ведут себя как в выбранный момент.
+   Сдвиг живёт в sessionStorage — закрыл вкладку, и всё вернулось к настоящему времени. */
+const RealDate = Date;
+const TM_ON = /[?&](draft|demo)(=|&|$)/.test(location.search);
+const TM_OFFSET = TM_ON ? (+sessionStorage.getItem("tmOffset") || 0) : 0;
+if (TM_OFFSET) {
+  window.Date = class extends RealDate {
+    constructor(...a) { a.length ? super(...a) : super(RealDate.now() + TM_OFFSET); }
+    static now() { return RealDate.now() + TM_OFFSET; }
+  };
+}
+
 /* Размер шрифта применяем сразу, до отрисовки, чтобы экран не «прыгал» */
 try { const fs = JSON.parse(localStorage.getItem("fontSize")); if (fs === "1" || fs === "2") document.documentElement.dataset.fs = fs; } catch {}
 
@@ -558,6 +579,7 @@ loadTrip()
     document.title = data.title + " — карманный гид";
     document.getElementById("hdr-title").textContent = data.title;
     document.getElementById("hdr-eyebrow").textContent = data.eyebrow || "";
+    if (TM_ON) timeMachine(data);
     const s = document.createElement("script");
     s.src = "app.js";
     document.body.appendChild(s);
@@ -570,6 +592,44 @@ loadTrip()
       '<article class="card"><h2>Не удалось загрузить данные тура</h2>' +
       '<p>Проверьте интернет и откройте приложение ещё раз. После первого открытия оно работает и без сети.</p></article>';
   });
+
+/* Полоска машины времени: ключевые моменты поездки одной кнопкой */
+function timeMachine(T) {
+  // Местное время date+hm в поясе tz → момент (мс)
+  const zoned = (date, hm, tz) => {
+    const guess = RealDate.parse(`${date}T${hm}:00Z`);
+    const p = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: tz, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })
+      .formatToParts(new RealDate(guess)).map(x => [x.type, x.value]));
+    return guess - (RealDate.parse(`${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}:00Z`) - guess);
+  };
+  const addDays = (iso, n) => new RealDate(RealDate.parse(iso + "T12:00:00Z") + n * 864e5).toISOString().slice(0, 10);
+  const home = (T.home && T.home.tz) || T.tz, out = T.flights && T.flights.out;
+  // День вылета: за 4 часа до вылета (уже видно сбор в аэропорту и статус рейса); нет времени — полдень
+  const depMs = out && out.at ? RealDate.parse(out.at) - 4 * 3600e3 : zoned(T.start, "12:00", home);
+  const moments = [["week", tx("tmWeek"), zoned(addDays(T.start, -7), "10:00", home)], ["dep", tx("tmDep"), depMs]];
+  const days = (T.days || []).map((d, i) => [`d${i + 1}`, tx("tmDay", i + 1), zoned(d.date, "09:00", T.tz)]);
+  const last = (T.days || []).length ? [["last", tx("tmLast"), zoned(T.end || T.days[T.days.length - 1].date, "08:00", T.tz)]] : [];
+  const cur = sessionStorage.getItem("tmKey") || "";
+  const btn = ([k, label]) => `<button type="button" data-tm="${k}"${k === cur ? ' aria-pressed="true"' : ""}>${label}</button>`;
+  const bar = document.createElement("div");
+  bar.className = "tm-bar";
+  bar.innerHTML = `<span class="tm-t">${tx("tmTitle")}</span>
+    ${[...moments, ...last].map(btn).join("")}
+    <select aria-label="${tx("tmPick")}"><option value="">${tx("tmPick")}</option>${days.map(([k, l]) => `<option value="${k}"${k === cur ? " selected" : ""}>${l}</option>`).join("")}</select>
+    <button type="button" data-tm=""${cur ? "" : ' aria-pressed="true"'}>${tx("tmNow")}</button>`;
+  document.body.prepend(bar);
+  // На узком экране полоска прокручивается — показываем выбранный момент
+  const on = bar.querySelector('[aria-pressed="true"]') || (cur.startsWith("d") && bar.querySelector("select"));
+  if (on) bar.scrollLeft = on.offsetLeft - 80;
+  const all = Object.fromEntries([...moments, ...days, ...last].map(([k, , ms]) => [k, ms]));
+  const go = k => {
+    if (k && all[k]) { sessionStorage.setItem("tmOffset", String(all[k] - RealDate.now())); sessionStorage.setItem("tmKey", k); }
+    else { sessionStorage.removeItem("tmOffset"); sessionStorage.removeItem("tmKey"); }
+    location.hash = "#today"; location.reload();
+  };
+  bar.addEventListener("click", e => { const b = e.target.closest("[data-tm]"); if (b) go(b.dataset.tm); });
+  bar.querySelector("select").addEventListener("change", e => go(e.target.value));
+}
 </script>
 </body>
 </html>
