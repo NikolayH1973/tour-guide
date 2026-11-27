@@ -37,54 +37,95 @@ legend { font-size:.85rem; font-weight:600; padding:0 6px; }
 .leg { border-bottom:1px dotted var(--line); margin-bottom:10px; }
 .leg-h { display:flex; justify-content:space-between; align-items:center; font-size:.85rem; font-weight:600; margin-bottom:6px; }
 .leg-h button { min-height:32px; padding:4px 10px; font-size:.8rem; }
+/* Шаги: заголовок-кнопка со статусом; свёрнутый шаг прячет содержимое */
+.step { padding: 0; overflow: hidden; }
+.step-h { all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 12px; width: 100%; padding: 14px 16px; cursor: pointer; }
+.step-h:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.step-n { width: 30px; height: 30px; border-radius: 50%; background: var(--bg); display: flex; align-items: center; justify-content: center; font-weight: 700; flex: none; }
+.step-t { font-weight: 700; font-size: 1.1rem; }
+.step-s { margin-left: auto; font-size: .82rem; padding: 3px 10px; border-radius: 999px; max-width: 55%; text-align: right; }
+.step-s.ok { background: #e8f3ec; color: var(--ok); }
+.step-s.warn { background: var(--warn-bg); color: var(--warn); }
+.step-s.later { background: var(--bg); color: var(--muted); }
+.step.ok .step-n { background: #e8f3ec; color: var(--ok); }
+.step.warn .step-n { background: var(--warn-bg); color: var(--warn); }
+.chev { color: var(--muted); transition: transform .15s; }
+.step.collapsed .chev { transform: rotate(-90deg); }
+.step-b { padding: 0 16px 16px; }
+.step.collapsed .step-b { display: none; }
+.dates { align-items: end; }
+.days-n { font-weight: 700; padding: 0 0 18px; }
+.ok-t { color: var(--ok); font-weight: 700; } .warn-t { color: var(--warn); font-weight: 700; }
 .sticky { position: sticky; bottom: 0; background: var(--bg); padding: 12px 0; border-top: 1px solid var(--line); }
 </style>
 </head>
 <body>
 <main>
   <h1>Конструктор тура</h1>
-  <p class="muted">Вставьте текст программы → проверьте дни → заполните данные поездки → «Предпросмотр» или «Скачать trip.json». Ничего никуда не отправляется: всё работает прямо в этом браузере.</p>
+  <p class="muted">Вставьте текст программы и пройдите шаги сверху вниз: <span class="ok-t">✓</span> — готово, <span class="warn-t">⚠</span> — нужно проверить. Всё сохраняется в этом браузере само; на сервер ничего не отправляется.</p>
+  <div class="row top-actions">
+    <button type="button" class="ghost" id="example">Пример тура</button>
+    <button type="button" class="ghost" id="reset">Начать новый тур</button>
+  </div>
 
-  <section class="card">
-    <h2>1. Текст программы</h2>
-    <p class="muted">Подойдёт текст со Штурмана, из Word или WhatsApp. Дни должны начинаться словами «ДЕНЬ 1.» или «ДНИ 2–3.»</p>
-    <textarea id="src" placeholder="ДЕНЬ 1. Тель-Авив – Рим&#10;Вылет в Рим. Обзорная экскурсия. Размещение, 3 ночи в Риме.&#10;ДЕНЬ 2. Ватикан&#10;Музеи Ватикана (за дополнительную плату)…"></textarea>
-    <div class="row"><button id="parse">Разобрать по дням</button></div>
-  </section>
-
-  <section class="card" id="checks-card" hidden>
-    <h2>2. Проверка</h2>
-    <div id="checks"></div>
-  </section>
-
-  <section class="card" id="trip-card" hidden>
-    <h2>3. Данные поездки</h2>
-    <div class="grid">
-      <label>Название тура<input id="f-title" placeholder="Рим и Ватикан"></label>
-      <label>Дата начала<input id="f-start" type="date"></label>
-      <label>Агентство<input id="f-agency" placeholder="Метрополь-Каспи"></label>
+  <section class="card step" id="step-text">
+    <button type="button" class="step-h" aria-expanded="true"><span class="step-n">1</span><span class="step-t">Текст программы</span><span class="step-s" id="st-text"></span><span class="chev" aria-hidden="true">⌄</span></button>
+    <div class="step-b">
+      <p class="muted">Подойдёт текст со Штурмана, из Word или WhatsApp — вместе с карточкой выезда (даты, гид, рейсы). Дни должны начинаться словами «ДЕНЬ 1.» или «ДНИ 2–3.»</p>
+      <textarea id="src" placeholder="ДЕНЬ 1. Тель-Авив – Рим&#10;Вылет в Рим. Обзорная экскурсия. Размещение, 3 ночи в Риме.&#10;ДЕНЬ 2. Ватикан&#10;Музеи Ватикана (за дополнительную плату)…"></textarea>
+      <div class="row"><button id="parse">Разобрать по дням</button></div>
+      <div id="checks-card" hidden><div id="checks"></div></div>
     </div>
-    <fieldset><legend>Гид</legend><div class="grid">
-      <label>Имя<input id="f-guide"></label>
-      <label>Телефон (с кодом страны)<input id="f-guide-phone" placeholder="+972 50-000-0000"></label>
-    </div></fieldset>
-    <fieldset><legend>Отели</legend>
+  </section>
+
+  <section class="card step" id="step-trip" hidden>
+    <button type="button" class="step-h" aria-expanded="true"><span class="step-n">2</span><span class="step-t">Поездка</span><span class="step-s" id="st-trip"></span><span class="chev" aria-hidden="true">⌄</span></button>
+    <div class="step-b">
+      <div class="grid">
+        <label>Название тура<input id="f-title" placeholder="Рим и Ватикан"></label>
+        <label>Агентство<input id="f-agency" placeholder="Метрополь-Каспи"></label>
+      </div>
+      <div class="grid dates">
+        <label>Начало<input id="f-start" type="date"></label>
+        <label>Окончание<input id="f-end" type="date"></label>
+        <div class="days-n" id="f-days"></div>
+      </div>
+      <fieldset><legend>Гид</legend><div class="grid">
+        <label>Имя<input id="f-guide"></label>
+        <label>Телефон (с кодом страны)<input id="f-guide-phone" placeholder="+972 50-000-0000"></label>
+      </div></fieldset>
+      <div class="grid">
+        <label>Сбор в аэропорту — где<input id="f-airport" placeholder="Бен-Гурион, терминал 3, у стойки агентства"></label>
+        <label>За сколько часов до вылета<input id="f-airport-h" type="number" min="1" max="6" placeholder="3"></label>
+      </div>
+      <label>Важно для туристов (виза, документы) — по строке на пункт<textarea id="f-notes" rows="2" placeholder="треб. виза"></textarea></label>
+    </div>
+  </section>
+
+  <section class="card step" id="step-flights" hidden>
+    <button type="button" class="step-h" aria-expanded="true"><span class="step-n">3</span><span class="step-t">Рейсы</span><span class="step-s" id="st-flights"></span><span class="chev" aria-hidden="true">⌄</span></button>
+    <div class="step-b">
+      <fieldset><legend>Рейсы туда</legend><div id="legs-out"></div>
+        <button type="button" class="ghost" data-add-leg="out" style="margin-bottom:12px">+ пересадка</button></fieldset>
+      <fieldset><legend>Рейсы обратно</legend><div id="legs-back"></div>
+        <button type="button" class="ghost" data-add-leg="back" style="margin-bottom:12px">+ пересадка</button></fieldset>
+      <label>Сколько лететь — для фразы «… в самолёте — время подготовиться»<input id="f-duration" placeholder="Пять часов"></label>
+    </div>
+  </section>
+
+  <section class="card step" id="step-hotels" hidden>
+    <button type="button" class="step-h" aria-expanded="true"><span class="step-n">4</span><span class="step-t">Отели</span><span class="step-s" id="st-hotels"></span><span class="chev" aria-hidden="true">⌄</span></button>
+    <div class="step-b">
       <p class="muted" style="margin-top:0">Если отели ещё неизвестны — оставьте пустым: туристы увидят «Отели сообщат ближе к вылету». Добавить их можно потом и выпустить обновление.</p>
       <div id="hotels"></div>
       <button type="button" class="ghost" id="add-hotel" style="margin-bottom:12px">+ отель</button>
       <p class="muted" id="hotels-check"></p>
-    </fieldset>
-    <fieldset><legend>Рейсы туда</legend><div id="legs-out"></div>
-      <button type="button" class="ghost" data-add-leg="out" style="margin-bottom:12px">+ пересадка</button></fieldset>
-    <fieldset><legend>Рейсы обратно</legend><div id="legs-back"></div>
-      <button type="button" class="ghost" data-add-leg="back" style="margin-bottom:12px">+ пересадка</button></fieldset>
-    <div class="grid">
-      <label>Сбор в аэропорту — где<input id="f-airport" placeholder="Бен-Гурион, терминал 3, у стойки агентства"></label>
-      <label>За сколько часов до вылета<input id="f-airport-h" type="number" min="1" max="6" placeholder="3"></label>
     </div>
-    <label>Важно для туристов (виза, документы) — по строке на пункт<textarea id="f-notes" rows="2" placeholder="треб. виза"></textarea></label>
-    <label>Сколько лететь — для фразы «… в самолёте — время подготовиться»<input id="f-duration" placeholder="Пять часов"></label>
-    <fieldset><legend>Направление</legend>
+  </section>
+
+  <section class="card step" id="step-dest" hidden>
+    <button type="button" class="step-h" aria-expanded="true"><span class="step-n">5</span><span class="step-t">Направление</span><span class="step-s" id="st-dest"></span><span class="chev" aria-hidden="true">⌄</span></button>
+    <div class="step-b">
       <label>Куда едет группа — страна или город<input id="f-city" placeholder="Вьетнам"></label>
       <p class="muted" id="dest-sum" style="margin-top:-4px"></p>
       <label>Курс для конвертера: сколько местной валюты за 1 ₪<input id="f-rate" inputmode="decimal" placeholder="подставится сам, если есть интернет"></label>
@@ -99,21 +140,25 @@ legend { font-size:.85rem; font-weight:600; padding:0 6px; }
         <label>Валюта — как называть в конвертере<input id="f-cur-name" data-auto placeholder="Донги"></label>
         <label>Флаг<input id="f-flag" data-auto placeholder="🇻🇳"></label>
       </div></details>
-    </fieldset>
+    </div>
   </section>
 
-  <section class="card" id="days-card" hidden>
-    <h2>4. Программа по дням</h2>
-    <p class="muted legend">Один пункт — одна строка. Строки со словами «доплата / за дополнительную плату» станут <span class="opt">фиолетовыми</span> (опция). Время и место сбора можно оставить пустыми — тогда туристы увидят «время и место сообщит гид».</p>
-    <div id="days"></div>
+  <section class="card step" id="step-days" hidden>
+    <button type="button" class="step-h" aria-expanded="true"><span class="step-n">6</span><span class="step-t">Программа по дням</span><span class="step-s" id="st-days"></span><span class="chev" aria-hidden="true">⌄</span></button>
+    <div class="step-b">
+      <p class="muted legend">Один пункт — одна строка. Строки со словами «доплата / за дополнительную плату» станут <span class="opt">фиолетовыми</span> (опция). Время и место сбора можно оставить пустыми — тогда туристы увидят «время и место сообщит гид».</p>
+      <div id="days"></div>
+    </div>
   </section>
 
-  <section class="card" id="extra-card" hidden>
-    <h2>Включено / не включено</h2>
-    <p class="muted">Найдено в тексте. Пока сохраняется в trip.json для будущего экрана «Условия тура».</p>
-    <div class="grid">
-      <label>Включено<textarea id="f-included" rows="6"></textarea></label>
-      <label>Не включено<textarea id="f-notincluded" rows="6"></textarea></label>
+  <section class="card step" id="step-extra" hidden>
+    <button type="button" class="step-h" aria-expanded="true"><span class="step-n">7</span><span class="step-t">Условия тура</span><span class="step-s" id="st-extra"></span><span class="chev" aria-hidden="true">⌄</span></button>
+    <div class="step-b">
+      <p class="muted">Найдено в тексте. Пока сохраняется в trip.json для будущего экрана «Условия тура».</p>
+      <div class="grid">
+        <label>Включено<textarea id="f-included" rows="6"></textarea></label>
+        <label>Не включено<textarea id="f-notincluded" rows="6"></textarea></label>
+      </div>
     </div>
   </section>
 
@@ -286,7 +331,7 @@ $("parse").addEventListener("click", () => {
   applyDeparture(dep);
   $("checks").innerHTML = checkProgram(parsed).map(([k, t]) => `<div class="check ${k}">${esc(t)}</div>`).join("")
     + (DEP_FOUND ? `<div class="check ok">${esc(DEP_FOUND)}</div>` : "");
-  ["checks-card", "trip-card", "days-card", "extra-card", "actions"].forEach(id => $(id).hidden = id !== "checks-card" && !parsed.days.length);
+  document.querySelectorAll(".step:not(#step-text), #actions").forEach(el => el.hidden = !parsed.days.length);
   $("checks-card").hidden = false;
   $("f-included").value = parsed.sec.included.join("\n");
   $("f-notincluded").value = parsed.sec.notIncluded.join("\n");
@@ -298,7 +343,7 @@ $("parse").addEventListener("click", () => {
     if (!mine("f-title")) $("f-title").value = dep.title;
   }
   if (!mine("f-title")) $("f-title").value = dep.title || head;
-  renderDays();
+  renderDays(); fillEnd(); checkHotels(); saveNow();
   $("checks-card").scrollIntoView({ behavior: "smooth" });
 });
 
@@ -314,7 +359,9 @@ function applyDeparture(dep) {
   if ($("f-city").value) fillDestination();   // даже если браузер сам вернул старое значение в поле
   if (dep.guide && !mine("f-guide")) $("f-guide").value = dep.guide;
   if (dep.notes.length && !mine("f-notes")) $("f-notes").value = dep.notes.join("\n");
-  const end = dep.end || (dep.start && parsed.days.length ? addDays(dep.start, Math.max(...parsed.days.map(d => d.to)) - 1) : "");
+  if (dep.end && (!val("f-end") || val("f-end") === autoEnd)) { $("f-end").value = dep.end; autoEnd = dep.end; }
+  fillEnd();
+  const end = val("f-end");
   for (const dir of ["out", "back"]) {
     const legs = dep.legs[dir];
     if (!legs.length || LEGS[dir].some(l => l.no || l.dep)) continue;
@@ -462,7 +509,7 @@ function fillDestination() {
   AUTO_IDS.forEach((id, i) => { if (touched.has(id)) return; if (id === "f-tz") setTz(forms[i]); else $(id).value = forms[i] || ""; });
   $("dest-sum").textContent = `Во фразах приложения: «Погода ${val("f-city-prep")}», «далеко от ${val("f-city-gen")}», «подготовиться к ${val("f-city-dat")}».`
     + (known ? "" : " Названия нет в справочнике — проверьте формы, часовой пояс и валюту ниже.");
-  if (!known) document.querySelector("#trip-card details").open = true;   // раскрываем, чтобы проверили
+  if (!known) document.querySelector("#step-dest details").open = true;   // раскрываем, чтобы проверили
   loadRate();
 }
 $("f-city").addEventListener("input", fillDestination);
@@ -493,9 +540,13 @@ function renderHotels() {
 function checkHotels() {
   const start = val("f-start"), list = HOTELS.filter(h => h.name || h.from);
   if (!list.length || !start || !parsed) { $("hotels-check").textContent = ""; return; }
-  const end = addDays(start, Math.max(...parsed.days.map(d => d.to)) - 1);
+  const end = tripEnd();
+  // Ночи считаем с прилёта: ночь в самолёте отеля не требует
+  const outLegs = LEGS.out.filter(l => l.date && (l.dep || l.to));
+  const last = outLegs[outLegs.length - 1];
+  const first = last ? addDays(last.date, last.next ? 1 : 0) : start;
   const notes = [];
-  for (let d = start; d < end; d = addDays(d, 1)) {
+  for (let d = first; d < end; d = addDays(d, 1)) {
     const n = list.filter(h => h.from && h.to && d >= h.from && d < h.to).length;
     if (n === 0) notes.push(`ночь на ${fmtDate(d)} — без отеля`);
     if (n > 1) notes.push(`ночь на ${fmtDate(d)} — два отеля`);
@@ -610,15 +661,15 @@ function buildTrip() {
   const T = structuredClone(BASE);
   const start = val("f-start");
   if (!start) throw new Error("Укажите дату начала тура.");
-  const total = Math.max(...parsed.days.map(d => d.to));
-  const end = addDays(start, total - 1);
+  const end = tripEnd();
+  if (end < start) throw new Error("Поездка: окончание раньше начала — проверьте даты.");
   const city = val("f-city");
   if (!val("f-tz")) {
     const name = val("f-city"), outLegs = LEGS.out.filter(l => l.to);
     setTz((DEST[name.toLowerCase()] || [])[3] || guessTz(name) || (outLegs.length ? guessTz(outLegs[outLegs.length - 1].to) : ""));
   }
   if (!val("f-tz")) {
-    document.querySelector("#trip-card details").open = true;
+    document.querySelector("#step-dest details").open = true;
     throw new Error("Направление: выберите страну в списке «Часовой пояс». По ней приложение понимает, какой день программы сегодня (во Вьетнаме, например, полночь наступает на 5 часов раньше, чем в Израиле).");
   }
   const tz = val("f-tz") || T.tz;
@@ -715,12 +766,204 @@ $("download").addEventListener("click", () => withTrip(T => {
   a.click(); URL.revokeObjectURL(a.href);
 }));
 
+
+/* =========================================================
+   ДАТЫ ПОЕЗДКИ: начало → окончание · N дней
+   Окончание — из карточки выезда, иначе по числу дней программы.
+   Человек может поправить; число дней считается само.
+   ========================================================= */
+const programDays = () => parsed && parsed.days.length ? Math.max(...parsed.days.map(d => d.to)) : 0;
+const tripEnd = () => val("f-end") || (val("f-start") && programDays() ? addDays(val("f-start"), programDays() - 1) : "");
+const daysBetween = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 864e5) + 1;
+const pluralRu = (n, one, few, many) => { const m10 = n % 10, m100 = n % 100; return m10 === 1 && m100 !== 11 ? one : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? few : many; };
+let autoEnd = "";   // последнее окончание, которое подставил сам конструктор
+function fillEnd() {
+  const cur = val("f-end");
+  if ((!cur || cur === autoEnd) && val("f-start") && programDays()) { autoEnd = addDays(val("f-start"), programDays() - 1); $("f-end").value = autoEnd; }
+  const s = val("f-start"), e = val("f-end");
+  $("f-days").textContent = s && e && e >= s ? `· ${daysBetween(s, e)} ${pluralRu(daysBetween(s, e), "день", "дня", "дней")}` : "";
+}
+$("f-start").addEventListener("change", fillEnd);
+$("f-end").addEventListener("change", fillEnd);
+
+/* =========================================================
+   ШАГИ: заголовок сворачивает шаг; справа — состояние
+   ✓ готово / ⚠ что проверить / «позже» (можно оставить на потом)
+   ========================================================= */
+document.querySelectorAll(".step-h").forEach(h => h.addEventListener("click", () => {
+  const st = h.closest(".step"); st.classList.toggle("collapsed");
+  h.setAttribute("aria-expanded", !st.classList.contains("collapsed"));
+  saveSoon();
+}));
+function setStatus(id, kind, text) {
+  const el = $("st-" + id), st = $("step-" + id);
+  el.className = "step-s " + kind; el.textContent = (kind === "ok" ? "✓ " : kind === "warn" ? "⚠ " : "") + text;
+  st.classList.remove("ok", "warn"); if (kind !== "later") st.classList.add(kind);
+}
+function updateStatus() {
+  if (!parsed || !parsed.days.length) { setStatus("text", "warn", "вставьте программу"); return; }
+  const errs = checkProgram(parsed).filter(c => c[0] === "err");
+  setStatus("text", errs.length ? "warn" : "ok", errs.length ? "есть ошибки в программе" : `${programDays()} ${pluralRu(programDays(), "день", "дня", "дней")}`);
+  // Поездка
+  const s = val("f-start"), e = tripEnd();
+  if (!s) setStatus("trip", "warn", "нет даты начала");
+  else if (e < s) setStatus("trip", "warn", "окончание раньше начала");
+  else if (daysBetween(s, e) !== programDays()) setStatus("trip", "warn", `по датам ${daysBetween(s, e)} дн., в программе ${programDays()}`);
+  else setStatus("trip", "ok", `${fmtDate(s).replace(/^\S+\s/, "")} – ${fmtDate(e).replace(/^\S+\s/, "")}`);
+  // Рейсы
+  const has = dir => LEGS[dir].some(l => l.dep);
+  const nums = [...LEGS.out, ...LEGS.back].some(l => /\d/.test(l.no || ""));
+  if (!has("out") || !has("back")) setStatus("flights", "warn", `нет времени вылета ${!has("out") ? "туда" : "обратно"}`);
+  else setStatus("flights", "ok", nums ? "с номерами рейсов" : "предварительно, без номеров");
+  // Отели
+  const hs = HOTELS.filter(h => h.name);
+  if (!hs.length) setStatus("hotels", "later", "сообщат позже");
+  else setStatus("hotels", /⚠/.test($("hotels-check").textContent) ? "warn" : "ok", /⚠/.test($("hotels-check").textContent) ? "есть ночи без отеля" : `${hs.length} ${pluralRu(hs.length, "отель", "отеля", "отелей")}`);
+  // Направление
+  if (!val("f-city")) setStatus("dest", "warn", "не указано");
+  else if (!val("f-tz")) setStatus("dest", "warn", "нет часового пояса");
+  else if (!val("f-rate")) setStatus("dest", "warn", `${val("f-city")} · нет курса валюты`);
+  else setStatus("dest", "ok", val("f-city"));
+  // Дни
+  const empty = parsed.days.filter(d => !d.items.length).length;
+  setStatus("days", errs.length || empty ? "warn" : "ok", errs.length ? "пропуски или повторы" : empty ? `${empty} ${pluralRu(empty, "день", "дня", "дней")} без описания` : "всё на месте");
+  // Условия
+  const inc = $("f-included").value.trim(), ninc = $("f-notincluded").value.trim();
+  setStatus("extra", inc || ninc ? "ok" : "later", inc || ninc ? "заполнено" : "необязательно");
+}
+
+/* =========================================================
+   АВТОСОХРАНЕНИЕ: форма помнит последний тур в этом браузере.
+   Закрыли вкладку, обновили страницу, вернулись завтра — всё на месте.
+   ========================================================= */
+const SAVE_KEY = "builderDraft";
+let saveTimer = null;
+function saveSoon() { clearTimeout(saveTimer); saveTimer = setTimeout(saveNow, 400); }
+function saveNow() {
+  const fields = {};
+  document.querySelectorAll("main input[id], main textarea[id], main select[id]").forEach(el => { fields[el.id] = el.type === "checkbox" ? el.checked : el.value; });
+  const state = { v: 1, fields, LEGS, HOTELS, parsed, typed: [...TYPED], touched: [...touched], depFound: DEP_FOUND,
+                  collapsed: [...document.querySelectorAll(".step.collapsed")].map(s => s.id), autoEnd };
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); } catch {}
+  updateStatus();
+}
+document.addEventListener("input", saveSoon);
+document.addEventListener("change", saveSoon);
+document.addEventListener("click", e => { if (e.target.closest("[data-add-leg], [data-del-leg], #add-hotel, [data-del-hotel]")) saveSoon(); });
+
+function restore() {
+  let st = null;
+  try { st = JSON.parse(localStorage.getItem(SAVE_KEY)); } catch {}
+  if (!st || st.v !== 1) { updateStatus(); return; }
+  for (const [id, v] of Object.entries(st.fields || {})) {
+    const el = $(id); if (!el) continue;
+    if (id === "f-tz") continue;
+    if (el.type === "checkbox") el.checked = v; else el.value = v;
+  }
+  (st.typed || []).forEach(id => TYPED.add(id));
+  autoEnd = st.autoEnd || "";
+  (st.touched || []).forEach(id => touched.add(id));
+  if (st.LEGS) { LEGS.out = st.LEGS.out; LEGS.back = st.LEGS.back; renderLegs("out"); renderLegs("back"); }
+  if (st.HOTELS) { HOTELS.splice(0, HOTELS.length, ...st.HOTELS); }
+  if (st.fields && st.fields["f-tz"]) setTz(st.fields["f-tz"]);
+  if (st.parsed && st.parsed.days && st.parsed.days.length) {
+    parsed = st.parsed; DEP_FOUND = st.depFound || "";
+    $("checks").innerHTML = checkProgram(parsed).map(([k, t]) => `<div class="check ${k}">${esc(t)}</div>`).join("")
+      + (DEP_FOUND ? `<div class="check ok">${esc(DEP_FOUND)}</div>` : "");
+    $("checks-card").hidden = false;
+    document.querySelectorAll(".step:not(#step-text), #actions").forEach(el => el.hidden = false);
+    renderDays(); renderHotels(); fillEnd();
+  }
+  (st.collapsed || []).forEach(id => { const s = $(id); if (s) { s.classList.add("collapsed"); s.querySelector(".step-h").setAttribute("aria-expanded", "false"); } });
+  updateStatus();
+}
+
+// «Начать новый тур»: очищаем память браузера и форму (скачанные trip.json остаются на компьютере)
+$("reset").addEventListener("click", () => {
+  if (!confirm("Очистить форму и начать новый тур?\nТекущий тур будет удалён из памяти браузера. Скачанные файлы trip.json останутся у вас на компьютере.")) return;
+  try { localStorage.removeItem(SAVE_KEY); } catch {}
+  location.reload();
+});
+
+/* =========================================================
+   «ПРИМЕР ТУРА» — наш выдуманный тур (не текст агентства): 12 дней,
+   пересадка в Дубае, три отеля, опции. Для проверки и показа агентствам.
+   ========================================================= */
+const EXAMPLE_TEXT = `Организованные туры Пример-Тур Вьетнам: от Ханоя до Сайгона
+12 ДНЕЙ
+ДЕНЬ 1. Тель-Авив – Дубай
+Вечерний вылет в Ханой с пересадкой в Дубае.
+ДЕНЬ 2. Ханой
+Прилёт в Ханой днём. Встреча с гидом и трансфер в гостиницу. 3 ночи в Ханое.
+ДЕНЬ 3. Ханой
+Обзорная экскурсия: мавзолей Хо Ши Мина, Храм литературы, озеро Возвращённого меча. Вечером шоу водяных кукол (за дополнительную плату).
+ДЕНЬ 4. Бухта Халонг
+Целый день в бухте Халонг: круиз между известняковыми скалами, обед на борту, посещение пещеры. Возвращение в Ханой.
+ДЕНЬ 5. Ханой – Дананг – Хойан
+Перелёт в Дананг, переезд в Хойан. 4 ночи в Хойане.
+ДЕНЬ 6. Хойан
+Прогулка по старому городу: Японский мост, дома торговцев. Вечером фонарики на реке. Мастер-класс вьетнамской кухни (за дополнительную плату).
+ДЕНЬ 7. Хюэ
+Поездка в Хюэ: императорская цитадель и гробница Ту Дыка. Возвращение в Хойан.
+ДЕНЬ 8. Хойан
+Свободный день. Отдых на пляже Анбанг.
+ДЕНЬ 9. Дананг – Хошимин
+Перелёт в Хошимин. Обзорная экскурсия: собор Сайгонской Богоматери, центральный почтамт. 3 ночи в Хошимине.
+ДЕНЬ 10. Дельта Меконга
+Поездка в дельту Меконга: плавучий рынок, лодки по каналам, кокосовая фабрика.
+ДЕНЬ 11. Хошимин
+Туннели Кути (за дополнительную плату). Вечер свободный.
+ДЕНЬ 12. Хошимин – Дубай – Тель-Авив
+Трансфер в аэропорт, вылет домой с пересадкой в Дубае.
+В СТОИМОСТЬ ВКЛЮЧЕНО:
+Перелёты
+Гостиницы 4* с завтраками
+Экскурсии по программе
+Русскоязычный гид
+В СТОИМОСТЬ НЕ ВКЛЮЧЕНО:
+Виза
+Медицинская страховка
+Чаевые гиду
+
+3 - 14 марта 2027
+12 дней
+Вьетнам
+Гид: Мария Лебедева
+Примечание: треб. виза
+Информация о перелёте
+Вылет: EK
+Тель-Авив - Дубай 22:45-02:55
+Дубай - Ханой 04:40-14:20
+Возврат: EK
+Хо Ши Мин - Дубай 10:05-14:05
+Дубай - Тель-Авив 16:50-18:20`;
+const EXAMPLE_HOTELS = [
+  { city: "Ханой", from: "2027-03-04", to: "2027-03-07", name: "Отель «Старый квартал» (пример)", address: "Ханой, район Хоан Кием", phone: "", ll: "21.0335, 105.8510" },
+  { city: "Хойан", from: "2027-03-07", to: "2027-03-11", name: "Отель «Река Тхубон» (пример)", address: "Хойан, у старого города", phone: "", ll: "15.8770, 108.3270" },
+  { city: "Хошимин", from: "2027-03-11", to: "2027-03-14", name: "Отель «Сайгон Центр» (пример)", address: "Хошимин, 1-й район", phone: "", ll: "10.7769, 106.7009" }
+];
+$("example").addEventListener("click", () => {
+  if (parsed && parsed.days.length && !confirm("Заменить текущий тур примером?")) return;
+  try { localStorage.removeItem(SAVE_KEY); } catch {}
+  TYPED.clear(); touched.clear(); autoEnd = "";
+  document.querySelectorAll("main input[id], main textarea[id]").forEach(el => { if (el.type === "checkbox") el.checked = false; else el.value = ""; });
+  LEGS.out = [newLeg("out")]; LEGS.back = [newLeg("back")];
+  $("src").value = EXAMPLE_TEXT;
+  $("parse").click();
+  HOTELS.splice(0, HOTELS.length, ...EXAMPLE_HOTELS.map(h => ({ ...h })));
+  renderHotels();
+  $("f-title").value = "Вьетнам: от Ханоя до Сайгона"; $("f-agency").value = "Пример-Тур";
+  if (!val("f-rate")) $("f-rate").value = "7000";
+  $("f-airport").value = "Бен-Гурион, терминал 3, у стойки агентства";
+  saveNow();
+});
+
 // Список часовых поясов: строим, когда все функции уже объявлены; при смене даты — заново (летнее/зимнее время)
 fillTzList();
 $("f-start").addEventListener("change", fillTzList);
 
 // Основа нового тура — чистый шаблон base.json: интерфейс, чек-лист, настройки «дома». Ни одного города.
-fetch("base.json").then(r => r.json()).then(T => { BASE = T; })
+fetch("base.json").then(r => r.json()).then(T => { BASE = T; restore(); })
   .catch(() => alertBox("Не удалось загрузить base.json — откройте конструктор с того же сайта, что и приложение."));
 </script>
 </body>
