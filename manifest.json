@@ -3,7 +3,6 @@
   "short_name": "Гид",
   "description": "Программа тура, отели, помощь и полезное — для группы в поездке",
   "lang": "ru",
-  "start_url": "/#today",
   "scope": "/",
   "display": "standalone",
   "background_color": "#eef1f5",

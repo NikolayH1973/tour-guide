@@ -565,8 +565,35 @@ const getJSON = url => fetch(url).then(r => { if (!r.ok) throw new Error(url + "
 // ?draft — предпросмотр из конструктора: данные берём из памяти браузера, а не из trip.json
 const DRAFT = new URLSearchParams(location.search).has("draft");
 let NO_DRAFT = false;   // ?draft открыли на устройстве, где конструктора не было (например, ссылку переслали на телефон)
+/* ?t=имя — тур из базы данных (Supabase). Спрашиваем функцию get_tour: она отдаёт тур
+   только по точному имени и только опубликованный. Публичный ключ — не секрет: что можно,
+   решают правила в самой базе. Последний полученный тур храним на телефоне —
+   без интернета приложение покажет его. */
+const SB_URL = "https://toxuqhsiyvvvewsephbh.supabase.co";
+const SB_KEY = "sb_publishable__XJg8OTFzyluHXhVtgCv_w_R5BLzg0O";
+const T_SLUG = (new URLSearchParams(location.search).get("t") || "").replace(/[^a-z0-9-]/g, "");
+const NOT_FOUND = new Error("tour not found");
+function loadFromDb(slug) {
+  const key = "tour:" + slug;
+  return fetch(SB_URL + "/rest/v1/rpc/get_tour", {
+      method: "POST", headers: { apikey: SB_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify({ p_slug: slug }), signal: AbortSignal.timeout(8000) })
+    .then(r => { if (!r.ok) throw new Error("база: HTTP " + r.status); return r.text(); })
+    .then(txt => (txt ? JSON.parse(txt) : null))                     // нет тура — база отвечает «null»
+    .then(d => {
+      if (!d) { try { localStorage.removeItem(key); } catch {} throw NOT_FOUND; }   // снят с публикации или удалён
+      try { localStorage.setItem(key, JSON.stringify(d)); } catch {}
+      return d;
+    })
+    .catch(err => {
+      if (err === NOT_FOUND) throw err;
+      try { const c = JSON.parse(localStorage.getItem(key)); if (c) return c; } catch {}   // нет сети — последняя копия
+      throw err;
+    });
+}
 const loadTrip = () => {
   if (DRAFT) { try { const d = JSON.parse(localStorage.getItem("tripDraft")); if (d) return Promise.resolve(d); } catch {} NO_DRAFT = true; }
+  if (T_SLUG) return loadFromDb(T_SLUG);
   return getJSON("trip.json");
 };
 loadTrip()
@@ -594,9 +621,11 @@ loadTrip()
     DIAG_ERRORS.push("загрузка: " + err.message);
     const box = document.getElementById("v-today");
     box.classList.add("active");
-    box.innerHTML =
-      '<article class="card"><h2>Не удалось загрузить данные тура</h2>' +
-      '<p>Проверьте интернет и откройте приложение ещё раз. После первого открытия оно работает и без сети.</p></article>';
+    box.innerHTML = err === NOT_FOUND
+      ? '<article class="card"><h2>Тур не найден</h2>' +
+        '<p>Возможно, ссылка неполная или тур ещё не опубликован. Попросите у гида или агентства ссылку ещё раз.</p></article>'
+      : '<article class="card"><h2>Не удалось загрузить данные тура</h2>' +
+        '<p>Проверьте интернет и откройте приложение ещё раз. После первого открытия оно работает и без сети.</p></article>';
   });
 
 /* Полоска машины времени: ключевые моменты поездки одной кнопкой */

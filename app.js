@@ -274,7 +274,8 @@ async function loadFlights(force) {
     if (!force && last && Date.now() - last.at < 5 * 60e3) continue;   // не чаще раза в 5 минут
     try {
       const test = FL_TEST === null ? "" : "&test=" + (FL_TEST || "today");
-      const res = await fetch("/api/flight?f=" + f.no + test, { signal: AbortSignal.timeout(8000) });
+      const tour = T_SLUG ? "&t=" + T_SLUG : "";            // тур из базы: функция возьмёт наши рейсы оттуда
+      const res = await fetch("/api/flight?f=" + f.no + test + tour, { signal: AbortSignal.timeout(8000) });
       FL[f.no] = { at: Date.now(), data: await res.json() };
       if (FL_TEST === null) store.set("fl", FL);
     } catch (e) { /* нет связи — остаётся прошлый ответ */ }

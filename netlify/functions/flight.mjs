@@ -14,9 +14,21 @@
 // Наши рейсы берём из trip.json этого же сайта: тогда функция одна для всех туров,
 // а отвечает только про рейсы текущего тура (чужие номера не тратят лимит Aviationstack).
 // at — время вылета по расписанию с часовым поясом аэропорта, например 2026-12-03T06:20:00+02:00
+// Если приложение открыто по ссылке ?t=имя, тур лежит в базе Supabase — берём рейсы оттуда
+// той же публичной функцией get_tour, что и приложение (ключ публичный, секрет не нужен).
+const SB_URL = "https://toxuqhsiyvvvewsephbh.supabase.co";
+const SB_KEY = "sb_publishable__XJg8OTFzyluHXhVtgCv_w_R5BLzg0O";
+async function loadTour(req) {
+  const slug = (new URL(req.url).searchParams.get("t") || "").replace(/[^a-z0-9-]/g, "");
+  if (!slug) return (await fetch(new URL("/trip.json", req.url), { signal: AbortSignal.timeout(5000) })).json();
+  const r = await fetch(SB_URL + "/rest/v1/rpc/get_tour", {
+    method: "POST", headers: { apikey: SB_KEY, "Content-Type": "application/json" },
+    body: JSON.stringify({ p_slug: slug }), signal: AbortSignal.timeout(5000) });
+  return (await r.json()) || {};
+}
 async function ourFlights(req) {
   try {
-    const T = await (await fetch(new URL("/trip.json", req.url), { signal: AbortSignal.timeout(5000) })).json();
+    const T = await loadTour(req);
     const map = {};
     for (const dir of [T.flights && T.flights.out, T.flights && T.flights.back]) {
       if (!dir) continue;

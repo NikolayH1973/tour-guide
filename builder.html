@@ -115,6 +115,22 @@ legend { font-size:.85rem; font-weight:600; padding:0 6px; }
 .ico:hover, .ico:focus-visible { background: var(--bg); opacity: 1; }
 .ico.on { filter: none; opacity: 1; background: #efe7fb; }
 @media (max-width: 560px) { .day-grid { grid-template-columns: 1fr 1fr; } .day-tags { margin-left: 0; width: 100%; justify-content: flex-start; } }
+/* Мои туры */
+.cloud-h { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.cloud-h h2 { margin: 0; }
+.cloud-h .linkbtn { all: unset; color: var(--accent); cursor: pointer; text-decoration: underline; margin-left: 6px; }
+.cloud-err { color: var(--err); margin: 8px 0 0; }
+.tour-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 0; border-top: 1px solid var(--line); }
+.tour-row:first-child { border-top: 0; }
+.tour-row.current { background: #f3f7fd; margin: 0 -16px; padding: 10px 16px; }
+.tour-t { font-weight: 700; flex: 1 1 220px; }
+.tour-t small { display: block; font-weight: 400; color: var(--muted); }
+.st-chip { font-size: .75rem; padding: 2px 8px; border-radius: 999px; background: var(--bg); color: var(--muted); }
+.st-chip.published { background: #e8f3ec; color: var(--ok); }
+.tour-row button { min-height: 36px; padding: 6px 12px; font-size: .85rem; }
+.tour-row button.danger { border-color: var(--err); color: var(--err); background: transparent; }
+.db-st { flex-basis: 100%; }
+.db-st a { color: var(--accent); word-break: break-all; }
 .act-err { flex-basis: 100%; background: var(--warn-bg); color: var(--warn); border-radius: 8px; padding: 8px 10px; font-size: .9rem; }
 .sticky { position: sticky; bottom: 0; background: var(--bg); padding: 12px 0; border-top: 1px solid var(--line); }
 </style>
@@ -122,11 +138,27 @@ legend { font-size:.85rem; font-weight:600; padding:0 6px; }
 <body>
 <main>
   <h1>Конструктор тура</h1>
-  <p class="muted">Вставьте текст программы и пройдите шаги сверху вниз: <span class="ok-t">✓</span> — готово, <span class="warn-t">⚠</span> — нужно проверить. Всё сохраняется в этом браузере само; на сервер ничего не отправляется.</p>
+  <p class="muted">Вставьте текст программы и пройдите шаги сверху вниз: <span class="ok-t">✓</span> — готово, <span class="warn-t">⚠</span> — нужно проверить. Черновик сохраняется в этом браузере сам; в базу — кнопкой «Сохранить в базу».</p>
   <div class="row top-actions">
     <button type="button" class="ghost" id="example">Пример тура</button>
     <button type="button" class="ghost" id="reset">Начать новый тур</button>
   </div>
+
+  <!-- Мои туры в базе. У полей входа НЕТ id: автосохранение собирает поля с id,
+       и пароль не должен попасть в черновик. -->
+  <section class="card" id="cloud">
+    <div class="cloud-h"><h2>☁️ Мои туры</h2><span class="muted" id="acct"></span></div>
+    <form id="login" hidden autocomplete="on">
+      <p class="muted">Войдите, чтобы сохранять туры в базу и открывать их с любого компьютера.</p>
+      <div class="grid">
+        <label>E-mail<input name="email" type="email" autocomplete="username" required></label>
+        <label>Пароль<input name="password" type="password" autocomplete="current-password" required></label>
+      </div>
+      <button type="submit">Войти</button>
+      <p class="cloud-err" hidden></p>
+    </form>
+    <div id="tours" hidden></div>
+  </section>
 
   <section class="card step" id="step-text">
     <button type="button" class="step-h" aria-expanded="true"><span class="step-n">1</span><span class="step-t">Текст программы</span><span class="step-s" id="st-text"></span><span class="chev" aria-hidden="true">⌄</span></button>
@@ -222,8 +254,11 @@ legend { font-size:.85rem; font-weight:600; padding:0 6px; }
 
   <div class="sticky row" id="actions" hidden>
     <div id="act-err" class="act-err" role="alert" hidden></div>
-    <button id="preview">Предпросмотр</button>
+    <button id="db-save" hidden>Сохранить в базу</button>
+    <button id="db-pub" class="ghost" hidden>Опубликовать</button>
+    <button id="preview" class="ghost">Предпросмотр</button>
     <button id="download" class="ghost">Скачать trip.json</button>
+    <div id="db-st" class="muted db-st" hidden></div>
   </div>
 </main>
 
@@ -1115,12 +1150,18 @@ function updateStatus() {
 const SAVE_KEY = "builderDraft";
 let saveTimer = null;
 function saveSoon() { clearTimeout(saveTimer); saveTimer = setTimeout(saveNow, 400); }
-function saveNow() {
+// Всё состояние конструктора одним объектом: «исходник» тура. Его же кладём в базу (колонка builder),
+// чтобы «Открыть» восстанавливал форму один в один — как после перезагрузки страницы.
+function builderState() {
   const fields = {};
   document.querySelectorAll("main input[id], main textarea[id], main select[id]").forEach(el => { fields[el.id] = el.type === "checkbox" ? el.checked : el.value; });
-  const state = { v: 1, fields, LEGS, HOTELS, parsed, typed: [...TYPED], touched: [...touched], depFound: DEP_FOUND,
-                  collapsed: [...document.querySelectorAll(".step.collapsed")].map(s => s.id), autoEnd, openDay: OPEN_DAY };
-  try { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); } catch {}
+  return { v: 1, fields, LEGS, HOTELS, parsed, typed: [...TYPED], touched: [...touched], depFound: DEP_FOUND,
+           collapsed: [...document.querySelectorAll(".step.collapsed")].map(s => s.id), autoEnd, openDay: OPEN_DAY };
+}
+function saveNow() {
+  const state = builderState(), json = JSON.stringify(state);
+  try { localStorage.setItem(SAVE_KEY, json); } catch {}
+  markDirty(json);
   updateStatus(); refreshDayTags();
 }
 document.addEventListener("input", saveSoon);
@@ -1156,8 +1197,8 @@ function restore() {
 
 // «Начать новый тур»: очищаем память браузера и форму (скачанные trip.json остаются на компьютере)
 $("reset").addEventListener("click", () => {
-  if (!confirm("Очистить форму и начать новый тур?\nТекущий тур будет удалён из памяти браузера. Скачанные файлы trip.json останутся у вас на компьютере.")) return;
-  try { localStorage.removeItem(SAVE_KEY); } catch {}
+  if (!confirm("Очистить форму и начать новый тур?\nФорма очистится. Туры, сохранённые в базе, останутся в «Моих турах».")) return;
+  try { localStorage.removeItem(SAVE_KEY); localStorage.removeItem(CUR_KEY); } catch {}
   location.reload();
 });
 
@@ -1221,6 +1262,7 @@ const EXAMPLE_HOTELS = [
 $("example").addEventListener("click", () => {
   if (parsed && parsed.days.length && !confirm("Заменить текущий тур примером?")) return;
   try { localStorage.removeItem(SAVE_KEY); } catch {}
+  setCurrent(null);   // пример — новый тур, в базе его ещё нет
   TYPED.clear(); touched.clear(); autoEnd = "";
   document.querySelectorAll("main input[id], main textarea[id]").forEach(el => { if (el.type === "checkbox") el.checked = false; else el.value = ""; });
   LEGS.out = [newLeg("out")]; LEGS.back = [newLeg("back")];
@@ -1234,13 +1276,234 @@ $("example").addEventListener("click", () => {
   saveNow();
 });
 
+
+/* =========================================================
+   БАЗА ДАННЫХ (Supabase): вход, «Мои туры», сохранить, открыть,
+   дублировать, опубликовать.
+
+   Почему без секретного ключа: страница видна всем, спрятать в ней ничего нельзя.
+   Публичный ключ только «стучится в дверь»; что можно — решают правила в самой базе
+   (файл supabase/001_tours.sql): вошедший видит и меняет только свои туры,
+   турист читает опубликованный тур функцией get_tour по точному имени.
+
+   Пишем на чистом fetch, без библиотеки supabase-js: нам нужны 5 запросов,
+   а библиотека — это ещё одна внешняя зависимость, которую надо грузить с чужого сайта.
+   ========================================================= */
+const SB_URL = "https://toxuqhsiyvvvewsephbh.supabase.co";
+const SB_KEY = "sb_publishable__XJg8OTFzyluHXhVtgCv_w_R5BLzg0O";   // публичный — можно в коде
+const SESSION_KEY = "sbSession", CUR_KEY = "builderTour";
+
+// --- Вход: Supabase выдаёт пропуск (access_token) на час и «продлеватель» (refresh_token) ---
+let SESSION = null;
+try { SESSION = JSON.parse(localStorage.getItem(SESSION_KEY)); } catch {}
+function keepSession(s) {
+  SESSION = s ? { access_token: s.access_token, refresh_token: s.refresh_token,
+                  expires_at: s.expires_at || Math.floor(Date.now() / 1000) + (s.expires_in || 3600),
+                  email: (s.user && s.user.email) || (SESSION && SESSION.email) || "" } : null;
+  try { SESSION ? localStorage.setItem(SESSION_KEY, JSON.stringify(SESSION)) : localStorage.removeItem(SESSION_KEY); } catch {}
+}
+async function authCall(grant, body) {
+  const r = await fetch(`${SB_URL}/auth/v1/token?grant_type=${grant}`, {
+    method: "POST", headers: { apikey: SB_KEY, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error_description || j.msg || j.message || "HTTP " + r.status);
+  return j;
+}
+// Пропуск истекает через час — продлеваем заранее, тихо
+async function token() {
+  if (!SESSION) throw new Error("Войдите в «Мои туры».");
+  if (SESSION.expires_at - 60 < Date.now() / 1000) {
+    try { keepSession(await authCall("refresh_token", { refresh_token: SESSION.refresh_token })); }
+    catch { keepSession(null); renderCloud(); throw new Error("Сессия закончилась — войдите снова."); }
+  }
+  return SESSION.access_token;
+}
+// Запрос к таблице через REST API базы
+async function db(path, opts = {}) {
+  const r = await fetch(`${SB_URL}/rest/v1/${path}`, {
+    ...opts,
+    headers: { apikey: SB_KEY, Authorization: "Bearer " + await token(), "Content-Type": "application/json",
+               Prefer: "return=representation", ...(opts.headers || {}) } });
+  const j = r.status === 204 ? null : await r.json().catch(() => null);
+  if (!r.ok) {
+    if (j && j.code === "23505") throw new Error("Тур с таким именем ссылки уже есть.");
+    throw new Error((j && (j.message || j.hint)) || "HTTP " + r.status);
+  }
+  return j;
+}
+
+// --- Какой тур из базы сейчас открыт в форме ---
+let CURRENT = null;          // { id, slug, status, savedJson }
+try { CURRENT = JSON.parse(localStorage.getItem(CUR_KEY)); } catch {}
+function setCurrent(c) {
+  CURRENT = c;
+  try { c ? localStorage.setItem(CUR_KEY, JSON.stringify(c)) : localStorage.removeItem(CUR_KEY); } catch {}
+  renderDbBar();
+}
+// Есть ли изменения после последнего сохранения в базу: сравниваем «исходник» целиком
+let DIRTY = false;
+// Сравниваем только содержание: свёрнутые шаги и раскрытый день — не изменения тура
+const contentKey = json => { try { const s = JSON.parse(json); delete s.collapsed; delete s.openDay; return JSON.stringify(s); } catch { return json; } };
+function markDirty(json) {
+  const was = DIRTY;
+  DIRTY = !!CURRENT && contentKey(json) !== contentKey(CURRENT.savedJson);
+  if (was !== DIRTY) renderDbBar();
+}
+
+// Имя для ссылки: дата + направление латиницей + 4 случайных знака,
+// чтобы ссылку нельзя было угадать перебором (2027-03-03-vetnam-k7q2)
+const TRANSLIT = { а:"a",б:"b",в:"v",г:"g",д:"d",е:"e",ё:"e",ж:"zh",з:"z",и:"i",й:"y",к:"k",л:"l",м:"m",н:"n",о:"o",п:"p",р:"r",с:"s",т:"t",у:"u",ф:"f",х:"h",ц:"ts",ч:"ch",ш:"sh",щ:"sch",ъ:"",ы:"y",ь:"",э:"e",ю:"yu",я:"ya" };
+function makeSlug(T) {
+  const word = String((T.city && T.city.name) || T.title || "tour").toLowerCase()
+    .replace(/[а-яё]/g, ch => TRANSLIT[ch]).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 30) || "tour";
+  const rnd = Array.from(crypto.getRandomValues(new Uint8Array(4)), x => "abcdefghjkmnpqrstuvwxyz23456789"[x % 31]).join("");
+  return `${T.start || "tour"}-${word}-${rnd}`;
+}
+const tourLink = slug => `${location.origin}/?t=${slug}`;
+
+// --- Сохранить: новый тур — INSERT, открытый из базы — UPDATE ---
+async function saveToDb() {
+  let T; try { T = buildTrip(); } catch (e) { alertBox(e.message); return null; }   // те же проверки, что у предпросмотра
+  const state = builderState(), json = JSON.stringify(state);
+  const row = { data: T, builder: state, agency: T.agency || val("f-agency") || null };
+  $("db-save").disabled = true;
+  try {
+    let res;
+    if (CURRENT && CURRENT.id) res = await db(`tours?id=eq.${CURRENT.id}`, { method: "PATCH", body: JSON.stringify(row) });
+    else res = await db("tours", { method: "POST", body: JSON.stringify({ ...row, slug: makeSlug(T), status: "draft" }) });
+    if (!res || !res.length) throw new Error("Тур не найден в базе — возможно, его удалили. Сохраните как новый: «Начать новый тур» не нужен, просто повторите.");
+    const t = res[0];
+    setCurrent({ id: t.id, slug: t.slug, status: t.status, savedJson: json, savedAt: t.updated_at });
+    DIRTY = false; renderDbBar(); loadTours();
+    return t;
+  } catch (e) {
+    if (/не найден/.test(e.message)) setCurrent(null);
+    alertBox(e.message); return null;
+  } finally { $("db-save").disabled = false; }
+}
+async function togglePublish() {
+  const t = await saveToDb(); if (!t) return;          // публикуем всегда свежую версию
+  const status = CURRENT.status === "published" ? "draft" : "published";
+  if (status === "draft" && !confirm("Снять тур с публикации?\nТуристы по ссылке увидят «тур не найден», пока вы не опубликуете его снова.")) return;
+  try {
+    const res = await db(`tours?id=eq.${CURRENT.id}`, { method: "PATCH", body: JSON.stringify({ status }) });
+    setCurrent({ ...CURRENT, status: res[0].status }); loadTours();
+  } catch (e) { alertBox(e.message); }
+}
+
+// --- Открыть: кладём «исходник» тура в автосохранение и перезагружаем страницу.
+//     Дальше работает обычное восстановление — то же, что после перезагрузки. ---
+async function openTour(id) {
+  if (DIRTY && !confirm("В текущем туре есть несохранённые изменения. Открыть другой тур без сохранения?")) return;
+  if (!DIRTY && !CURRENT && parsed && parsed.days.length && !confirm("Текущий тур не сохранён в базе. Открыть другой тур? Текущий пропадёт из формы.")) return;
+  try {
+    const [t] = await db(`tours?id=eq.${id}&select=id,slug,status,builder,updated_at`);
+    if (!t || !t.builder) throw new Error("У этого тура нет данных конструктора — открыть для правки нельзя.");
+    const json = JSON.stringify(t.builder);
+    localStorage.setItem(SAVE_KEY, json);
+    localStorage.setItem(CUR_KEY, JSON.stringify({ id: t.id, slug: t.slug, status: t.status, savedJson: json, savedAt: t.updated_at }));
+    location.reload();
+  } catch (e) { alertBox(e.message); }
+}
+// --- Дублировать: новый выезд той же программы. Даты, рейсы и отели потом правите. ---
+async function duplicateTour(id) {
+  try {
+    const [t] = await db(`tours?id=eq.${id}&select=data,builder,agency`);
+    const data = { ...t.data, title: t.data.title + " (копия)" };
+    const builder = JSON.parse(JSON.stringify(t.builder || {}));
+    if (builder.fields) { builder.fields["f-title"] = data.title; (builder.typed = builder.typed || []).includes("f-title") || builder.typed.push("f-title"); }
+    const [n] = await db("tours", { method: "POST", body: JSON.stringify({ data, builder, agency: t.agency, slug: makeSlug(data), status: "draft" }) });
+    await loadTours();
+    if (confirm(`Копия создана: «${data.title}».\nОткрыть её, чтобы поменять даты, рейсы и отели?`)) openTour(n.id);
+  } catch (e) { alertBox(e.message); }
+}
+async function deleteTour(id, title, status) {
+  const warn = status === "published" ? "\n\nТур ОПУБЛИКОВАН: у туристов ссылка перестанет работать." : "";
+  if (!confirm(`Удалить тур «${title}» из базы навсегда? Это нельзя отменить.${warn}`)) return;
+  try {
+    await db(`tours?id=eq.${id}`, { method: "DELETE" });
+    if (CURRENT && CURRENT.id === id) setCurrent(null);
+    loadTours();
+  } catch (e) { alertBox(e.message); }
+}
+
+// --- Отрисовка ---
+const STATUS_RU = { draft: "черновик", published: "опубликован", archived: "архив" };
+function renderCloud() {
+  $("acct").innerHTML = SESSION ? `${esc(SESSION.email)} · <button type="button" class="linkbtn" id="logout">Выйти</button>` : "";
+  $("login").hidden = !!SESSION;
+  $("tours").hidden = !SESSION;
+  renderDbBar();
+  if (SESSION) loadTours();
+}
+async function loadTours() {
+  if (!SESSION) return;
+  try {
+    const list = await db("tours?select=id,slug,status,updated_at,title:data->>title,start:data->>start,end:data->>end&order=updated_at.desc", { headers: { Prefer: "" } });
+    $("tours").innerHTML = list.length ? list.map(t => `
+      <div class="tour-row${CURRENT && CURRENT.id === t.id ? " current" : ""}" data-id="${t.id}">
+        <span class="tour-t">${esc(t.title || "Без названия")}<small>${t.start ? fmtDate(t.start) : ""}${t.end ? " – " + fmtDate(t.end) : ""}${CURRENT && CURRENT.id === t.id ? " · открыт сейчас" : ""}</small></span>
+        <span class="st-chip ${t.status}">${STATUS_RU[t.status] || t.status}</span>
+        <button type="button" class="ghost" data-open-tour="${t.id}">Открыть</button>
+        <button type="button" class="ghost" data-dup-tour="${t.id}">Дублировать</button>
+        <button type="button" class="danger" data-del-tour="${t.id}" data-title="${esc(t.title || "")}" data-status="${t.status}" aria-label="Удалить">🗑</button>
+      </div>`).join("")
+      : `<p class="muted">В базе пока нет туров. Заполните тур и нажмите внизу «Сохранить в базу».</p>`;
+  } catch (e) { $("tours").innerHTML = `<p class="cloud-err">${esc(e.message)}</p>`; }
+}
+function renderDbBar() {
+  const logged = !!SESSION;
+  $("db-save").hidden = !logged;
+  $("db-pub").hidden = !logged || !CURRENT;
+  $("db-save").textContent = CURRENT ? (DIRTY ? "Сохранить изменения" : "Сохранено ✓") : "Сохранить в базу";
+  $("db-pub").textContent = CURRENT && CURRENT.status === "published" ? "Снять с публикации" : "Опубликовать";
+  const st = $("db-st");
+  if (!logged) { st.hidden = true; return; }
+  st.hidden = false;
+  if (!CURRENT) { st.textContent = "Этого тура в базе ещё нет."; return; }
+  const when = CURRENT.savedAt ? new Date(CURRENT.savedAt).toLocaleString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
+  st.innerHTML = (DIRTY ? "⚠ Есть изменения, не сохранённые в базе. " : `В базе: ${STATUS_RU[CURRENT.status]}${when ? ", сохранён " + when : ""}. `)
+    + (CURRENT.status === "published"
+      ? `Ссылка для туристов: <a href="${tourLink(CURRENT.slug)}" target="_blank" rel="noopener">${tourLink(CURRENT.slug)}</a> <button type="button" class="linkbtn" id="copy-link">копировать</button>`
+      : "Туристы его не видят, пока вы не опубликуете.");
+}
+
+// --- События ---
+$("login").addEventListener("submit", async e => {
+  e.preventDefault();
+  const f = e.target, err = f.querySelector(".cloud-err"), btn = f.querySelector("button");
+  err.hidden = true; btn.disabled = true;
+  try {
+    keepSession(await authCall("password", { email: f.email.value.trim(), password: f.password.value }));
+    f.password.value = "";
+    renderCloud();
+  } catch (x) {
+    err.textContent = /invalid/i.test(x.message) ? "Неверный e-mail или пароль." : "Не получилось войти: " + x.message;
+    err.hidden = false;
+  } finally { btn.disabled = false; }
+});
+document.addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.id === "logout") {
+    fetch(`${SB_URL}/auth/v1/logout`, { method: "POST", headers: { apikey: SB_KEY, Authorization: "Bearer " + (SESSION && SESSION.access_token) } }).catch(() => {});
+    keepSession(null); renderCloud();
+  }
+  else if (b.id === "copy-link") navigator.clipboard.writeText(tourLink(CURRENT.slug)).then(() => { b.textContent = "скопировано ✓"; });
+  else if (b.dataset.openTour) openTour(b.dataset.openTour);
+  else if (b.dataset.dupTour) duplicateTour(b.dataset.dupTour);
+  else if (b.dataset.delTour) deleteTour(b.dataset.delTour, b.dataset.title, b.dataset.status);
+});
+$("db-save").addEventListener("click", saveToDb);
+$("db-pub").addEventListener("click", togglePublish);
+renderCloud();
+
 // Список часовых поясов: строим, когда все функции уже объявлены; при смене даты — заново (летнее/зимнее время)
 fillTzList();
 $("f-start").addEventListener("change", fillTzList);
 renderLegs("out"); renderLegs("back");
 
 // Основа нового тура — чистый шаблон base.json: интерфейс, чек-лист, настройки «дома». Ни одного города.
-fetch("base.json").then(r => r.json()).then(T => { BASE = T; restore(); })
+fetch("base.json").then(r => r.json()).then(T => { BASE = T; restore(); markDirty(JSON.stringify(builderState())); renderDbBar(); })
   .catch(() => alertBox("Не удалось загрузить base.json — откройте конструктор с того же сайта, что и приложение."));
 </script>
 </body>
