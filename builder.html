@@ -134,6 +134,11 @@ legend { font-size:.85rem; font-weight:600; padding:0 6px; }
 .fixdate { min-height: 32px; padding: 4px 10px; margin-left: 6px; font-size: .85rem; }
 .opt-ed { border: 1px solid var(--line); border-left: 4px solid var(--opt); border-radius: 10px; padding: 10px 12px; margin-top: 10px; background: #fff; }
 .opt-ed-h { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
+.opt-price { all: unset; flex: none; cursor: pointer; font-size: .8rem; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: #efe7fb; color: var(--opt); white-space: nowrap; }
+.opt-price.none { background: var(--warn-bg); color: var(--warn); }
+.opt-price:focus-visible { outline: 2px solid var(--accent); }
+@keyframes flash { from { box-shadow: 0 0 0 4px rgba(107,63,181,.45); } to { box-shadow: 0 0 0 0 rgba(107,63,181,0); } }
+.opt-ed.flash { animation: flash 1.6s ease-out; }
 .act-err { flex-basis: 100%; background: var(--warn-bg); color: var(--warn); border-radius: 8px; padding: 8px 10px; font-size: .9rem; }
 .sticky { position: sticky; bottom: 0; background: var(--bg); padding: 12px 0; border-top: 1px solid var(--line); }
 </style>
@@ -404,6 +409,7 @@ function renderDays() {
         ${d.items.map((it, k) => `<div class="item${it.opt ? " is-opt" : ""}" draggable="true" data-k="${k}">
           <span class="grip" title="Перетащите, чтобы поменять порядок" aria-hidden="true">⠿</span>
           <input data-it="${k}" value="${esc(it.t)}" aria-label="Пункт ${k + 1}">
+          ${it.opt ? `<button type="button" class="opt-price${optPriceShort(it) ? "" : " none"}" data-goopt="${i}:${k}" id="optchip-${i}-${k}" title="Цена и описание — в шаге «Опции за доплату»">${esc(optPriceShort(it) || "цена?")} ›</button>` : ""}
           <button type="button" class="ico${it.opt ? " on" : ""}" data-opt="${k}" title="${it.opt ? "Убрать из опций" : "Сделать опцией за доплату"}" aria-pressed="${it.opt}">🪙</button>
           <button type="button" class="ico" data-del-it="${k}" title="Удалить пункт" aria-label="Удалить пункт">✕</button>
         </div>`).join("")}
@@ -437,8 +443,8 @@ function renderOpts() {
           <div class="opt-ed-h"><span class="day-n">${d.from}</span><span class="day-d">${date ? fmtDate(date) : ""}</span><span class="muted">${esc(it.t)}</span></div>
           <label>Название для туристов<input data-of="title" value="${esc(o.title != null ? o.title : optTitle(it.t))}"></label>
           <div class="grid">
-            <label>Цена, взрослый (${esc(cur)})<input data-of="adult" type="number" min="0" step="any" value="${esc(o.adult != null ? o.adult : "")}" placeholder="45"></label>
-            <label>Цена, ребёнок (${esc(cur)}) — если отличается<input data-of="child" type="number" min="0" step="any" value="${esc(o.child != null ? o.child : "")}" placeholder="не обязательно"></label>
+            <label>Цена, ${esc(cur)}<input data-of="adult" type="number" min="0" step="any" value="${esc(o.adult != null ? o.adult : "")}"></label>
+            <label>Цена для детей до ${esc(val("f-child-age") || "12")} лет, ${esc(cur)} — только если другая<input data-of="child" type="number" min="0" step="any" value="${esc(o.child != null ? o.child : "")}"></label>
           </div>
           <label>Коротко — одна фраза, чтобы захотелось<input data-of="hook" value="${esc(o.hook || "")}" placeholder="Вечер, который запомнится всей семье"></label>
           <label>Подробное описание — абзацы через пустую строку<textarea data-of="text" rows="4">${esc(o.text || "")}</textarea></label>
@@ -450,13 +456,33 @@ function renderOpts() {
       }).join("");
 }
 const optCurSymbol = () => val("f-opt-cur") === "local" ? (val("f-cur") || "местн.") : (val("f-opt-cur") || "$");
+// Короткая цена для строки в «Программе по дням»: «$15 / $10» или «$45»
+function optPriceShort(it) {
+  const o = it.o || {}, s = optCurSymbol(), has = v => v !== "" && v != null;
+  if (!has(o.adult)) return "";
+  return s + o.adult + (has(o.child) && +o.child !== +o.adult ? " / " + s + o.child : "");
+}
 document.addEventListener("input", e => {
   const box = e.target.closest(".opt-ed"); if (!box || !e.target.dataset.of) return;
   const [di, k] = box.dataset.oi.split(":").map(Number), it = parsed.days[di].items[k];
   it.o = it.o || {};
   it.o[e.target.dataset.of] = e.target.value;
+  // цену видно и в шаге 6 — обновляем там на лету
+  const chip = $(`optchip-${di}-${k}`);
+  if (chip) { chip.textContent = (optPriceShort(it) || "цена?") + " ›"; chip.classList.toggle("none", !optPriceShort(it)); }
 });
-$("f-opt-cur").addEventListener("change", renderOpts);
+$("f-opt-cur").addEventListener("change", () => { renderOpts(); renderDays(); });
+$("f-child-age").addEventListener("change", renderOpts);
+// «цена? ›» у пункта в шаге 6 → карточка этой опции в шаге 7, курсор в поле цены
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-goopt]"); if (!b) return;
+  const st = $("step-opts");
+  if (st.classList.contains("collapsed")) { st.classList.remove("collapsed"); st.querySelector(".step-h").setAttribute("aria-expanded", "true"); }
+  const card = document.querySelector(`.opt-ed[data-oi="${b.dataset.goopt}"]`); if (!card) return;
+  card.scrollIntoView({ behavior: "smooth", block: "center" });
+  card.classList.remove("flash"); void card.offsetWidth; card.classList.add("flash");
+  setTimeout(() => card.querySelector('[data-of="adult"]').focus({ preventScroll: true }), 400);
+});
 // Значки обновляем на лету (рейсы, отели, сбор поменялись), не трогая поля ввода
 function refreshDayTags() {
   if (!parsed) return;
